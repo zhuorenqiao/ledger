@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: ledger-backend
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:ledger}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=utf8&rewriteBatchedStatements=true
+    username: ${DB_USER:ledger}
+    password: ${DB_PASSWORD:ledger-dev}
+    hikari:
+      maximum-pool-size: 10
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 100
+        order_inserts: true
+
+server:
+  # 8080 落在 Windows/Hyper-V 的 TCP 保留段（8006-8105）内，本机无法绑定，故用 9090
+  port: ${SERVER_PORT:9090}
+
+app:
+  jwt:
+    # 仅本地开发用的默认值，生产环境必须通过 JWT_SECRET 覆盖
+    secret: ${JWT_SECRET:dev-only-ledger-jwt-secret-key-please-override-in-prod-0123456789}
+    ttl: P7D
+    issuer: ledger-app
+  cors:
+    allowed-origin-patterns:
+      - http://localhost:[*]
+      - http://127.0.0.1:[*]
+
+logging:
+  level:
+    com.example.ledger: INFO

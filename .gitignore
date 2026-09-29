@@ -1,0 +1,8 @@
+# Maven 构建产物
+target/
+
+# 本地日志与 IDE
+*.log
+.idea/
+*.iml
+.vscode/
