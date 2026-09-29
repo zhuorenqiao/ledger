@@ -6,3 +6,6 @@ target/
 .idea/
 *.iml
 .vscode/
+
+# 用户上传的头像，不属于代码库
+data/

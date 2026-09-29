@@ -6,6 +6,9 @@ CREATE TABLE IF NOT EXISTS users (
   username      VARCHAR(64)  NOT NULL,
   password_hash VARCHAR(100) NOT NULL,
   nickname      VARCHAR(64)  NOT NULL DEFAULT '',
+  email         VARCHAR(255) NOT NULL DEFAULT '',
+  phone         VARCHAR(20)  NOT NULL DEFAULT '' COMMENT '中国大陆 11 位手机号，可空',
+  avatar        VARCHAR(64)  NOT NULL DEFAULT '' COMMENT '头像文件名，实际图片在 app.storage.avatar-dir',
   created_at    BIGINT       NOT NULL COMMENT 'epoch millis',
   PRIMARY KEY (id),
   UNIQUE KEY uk_users_username (username)

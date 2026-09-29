@@ -79,9 +79,12 @@ token 有效期 7 天；过期后接口返回 401，客户端会自动清会话�
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| POST | `/api/auth/register` | `{username, password, nickname?}` → 201，直接返回 token |
+| POST | `/api/auth/register` | `{username, password, nickname?, email?, phone?}` → 201，直接返回 token |
 | POST | `/api/auth/login` | `{username, password}` → `{token, tokenType, expiresAt, user}` |
 | GET | `/api/auth/me` | 当前账号 |
+| PUT | `/api/auth/me` | 改资料 `{nickname?, email?, phone?}` → 最新账号；`username` 是登录凭据，不在此接口范围内 |
+| POST | `/api/auth/me/avatar` | `multipart/form-data`，字段名 `file`；≤2MB，仅 png/jpeg/webp/gif → 最新账号 |
+| GET | `/api/auth/me/avatar` | 头像二进制，`Cache-Control: no-store`；未上传时 404 |
 | GET | `/api/txns?page=0&size=20&day=` | 按 `day DESC, created_at DESC` 分页，`last=true` 表示取完；`day`（`yyyy-MM-dd`）可选，只看某一天。单页上限 1000 |
 | POST | `/api/txns` | 记一笔，返回带 `id` 的账单 |
 | POST | `/api/txns/batch` | 批量写入（“载入示例数据”用），单次上限 5000 |
@@ -100,6 +103,24 @@ token 有效期 7 天；过期后接口返回 401，客户端会自动清会话�
 
 `db/schema.sql`，由 MySQL 容器首次初始化时执行；应用侧是 `spring.jpa.hibernate.ddl-auto=validate`，
 只校验不建表。`users` 与 `txn` 一对多，删账号时账单级联删除。
+
+initdb 脚本只在数据卷为空时跑一次，所以改过 `schema.sql` 后，已有的库要手动补列，否则启动时 validate 会失败：
+
+```bash
+docker exec ledger-mysql mysql -uroot -pledger-root ledger -e "
+  ALTER TABLE users ADD COLUMN email  VARCHAR(255) NOT NULL DEFAULT '' AFTER nickname,
+                    ADD COLUMN phone  VARCHAR(20)  NOT NULL DEFAULT '' AFTER email,
+                    ADD COLUMN avatar VARCHAR(64)  NOT NULL DEFAULT '' AFTER phone;"
+```
+
+`email` 与 `phone` 都是选填，空串即未填；只在个人中心可改，都不做唯一性约束，也不发验证短信/邮件。
+手机号只认中国大陆 11 位（`1[3-9]` 开头），正则 `|1[3-9]\d{9}` 同时挂在注册和改资料两个 DTO 上，
+客户端 `lib/utils/validators.dart` 里有一份等价的，改规则要两边一起改。
+
+头像图片落在 `app.storage.avatar-dir`（默认 `data/avatars/`，已 gitignore），数据库只记文件名
+`{userId}.{扩展名}`。文件名由服务端按 Content-Type 生成，客户端传的文件名一律不用，所以不存在
+路径穿越；换图时删掉旧文件。地址固定为 `/api/auth/me/avatar` 且响应 `no-store`；客户端会额外带一个
+`?v=` 查询参数用于绕开自己进程内的图片缓存，服务端忽略它。
 
 ## 快速自测
 

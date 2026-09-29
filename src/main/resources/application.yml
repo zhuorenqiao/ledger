@@ -16,6 +16,11 @@ spring:
         jdbc:
           batch_size: 100
         order_inserts: true
+  servlet:
+    # 头像上传的硬上限，超出直接 413
+    multipart:
+      max-file-size: 2MB
+      max-request-size: 2MB
 
 server:
   # 8080 落在 Windows/Hyper-V 的 TCP 保留段（8006-8105）内，本机无法绑定，故用 9090
@@ -31,6 +36,9 @@ app:
     allowed-origin-patterns:
       - http://localhost:[*]
       - http://127.0.0.1:[*]
+  storage:
+    # 头像落盘目录，相对后端启动目录；容器化部署时挂到持久卷上
+    avatar-dir: ${AVATAR_DIR:data/avatars}
 
 logging:
   level:

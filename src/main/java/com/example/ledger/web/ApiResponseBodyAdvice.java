@@ -1,6 +1,7 @@
 package com.example.ledger.web;
 
 import org.springframework.core.MethodParameter;
+import org.springframework.core.io.Resource;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.server.ServerHttpRequest;
@@ -22,6 +23,10 @@ public class ApiResponseBodyAdvice implements ResponseBodyAdvice<Object> {
   public Object beforeBodyWrite(Object body, MethodParameter returnType,
       MediaType selectedContentType, Class<? extends HttpMessageConverter<?>> converterType,
       ServerHttpRequest request, ServerHttpResponse response) {
-    return body instanceof ApiResponse<?> ? body : ApiResponse.ok(body);
+    // 头像这类二进制响应直接透传，包成 JSON 就不是图片了
+    if (body instanceof Resource || body instanceof ApiResponse<?>) {
+      return body;
+    }
+    return ApiResponse.ok(body);
   }
 }

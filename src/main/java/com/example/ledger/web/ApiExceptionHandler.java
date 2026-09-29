@@ -11,6 +11,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 /** 把各类异常统一翻译成 {@link ApiResponse}，HTTP 状态码与业务 code 同时给出。 */
 @RestControllerAdvice
@@ -46,6 +47,12 @@ public class ApiExceptionHandler {
   @ExceptionHandler(HttpMessageNotReadableException.class)
   public ResponseEntity<ApiResponse<Void>> handleUnreadable(HttpMessageNotReadableException e) {
     return forError(ErrorCode.PARAM_INVALID, "请求体不是合法的 JSON");
+  }
+
+  /** 上传头像超过 spring.servlet.multipart 的上限，保留 413 只补业务 code。 */
+  @ExceptionHandler(MaxUploadSizeExceededException.class)
+  public ResponseEntity<ApiResponse<Void>> handleTooLarge(MaxUploadSizeExceededException e) {
+    return forStatus(HttpStatus.PAYLOAD_TOO_LARGE.value(), "图片超过大小上限");
   }
 
   /**
