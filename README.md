@@ -1,6 +1,6 @@
 # 记账本后端（Spring Boot + MySQL）
 
-Flutter 客户端（同级目录 `../flutter-demo2`）的数据源。账单落 MySQL，统计口径由 SQL 聚合完成，客户端只做渲染。
+Flutter 客户端（同级目录 `../ledger-front`）的数据源。账单落 MySQL，统计口径由 SQL 聚合完成，客户端只做渲染。
 
 - Java 17 / Spring Boot 3.5 / Spring Security（JWT）/ Spring Data JPA
 - MySQL 8.4，用 Docker Compose 启动
@@ -116,5 +116,5 @@ curl "http://localhost:9090/api/stats/summary?from=2026-09-01&to=2026-09-30" \
 客户端契约的真实联调（需后端在跑）：
 
 ```bash
-cd ../flutter-demo2 && RUN_BACKEND_TESTS=1 flutter test test/backend_integration_test.dart
+cd ../ledger-front && RUN_BACKEND_TESTS=1 flutter test test/backend_integration_test.dart
 ```
