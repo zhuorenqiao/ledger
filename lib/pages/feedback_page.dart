@@ -5,6 +5,7 @@ import '../app_theme.dart';
 import '../auth/auth_session.dart';
 import '../data/api_client.dart';
 import '../data/feedback_repository.dart';
+import '../l10n/app_localizations.dart';
 
 /// 意见反馈：写一段话（最多 1000 字），可附最多 3 张图；提交成功后回到上一页。
 class FeedbackPage extends StatefulWidget {
@@ -42,6 +43,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
   }
 
   Future<void> _pickImages() async {
+    final l10n = AppLocalizations.of(context);
     if (_images.length >= FeedbackRepository.maxImages) return;
     final picked = await FilePicker.pickFiles(type: FileType.image);
     if (picked.isEmpty || !mounted) return; // 空列表表示用户取消了选择
@@ -51,12 +53,12 @@ class _FeedbackPageState extends State<FeedbackPage> {
     final rejected = <String>[];
     for (final file in picked) {
       if (_images.length + added.length >= FeedbackRepository.maxImages) {
-        rejected.add('${file.name}（最多 ${FeedbackRepository.maxImages} 张）');
+        rejected.add(l10n.imageTooMany(file.name, FeedbackRepository.maxImages));
         continue;
       }
       final bytes = await file.readAsBytes();
       if (bytes.length > _maxImageBytes) {
-        rejected.add('${file.name}（超过 2MB）');
+        rejected.add(l10n.imageTooBig(file.name));
         continue;
       }
       added.add((filename: file.name, bytes: bytes));
@@ -65,15 +67,16 @@ class _FeedbackPageState extends State<FeedbackPage> {
     setState(() {
       _images.addAll(added);
       if (rejected.isNotEmpty) {
-        _error = '这几张图没能添加：${rejected.join('、')}';
+        _error = l10n.imagesRejected(l10n.joinList(rejected));
       }
     });
   }
 
   Future<void> _submit() async {
+    final l10n = AppLocalizations.of(context);
     final content = _content.text.trim();
     if (content.isEmpty) {
-      setState(() => _error = '写点什么再提交吧');
+      setState(() => _error = l10n.feedbackEmpty);
       return;
     }
     final messenger = ScaffoldMessenger.of(context);
@@ -88,21 +91,22 @@ class _FeedbackPageState extends State<FeedbackPage> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = e.message;
+        _error = l10n.errorText(e);
       });
       return;
     }
     if (!mounted) return;
     setState(() => _busy = false);
-    messenger.showSnackBar(const SnackBar(content: Text('反馈已提交，谢谢你的建议')));
+    messenger.showSnackBar(SnackBar(content: Text(l10n.feedbackSubmitted)));
     navigator.pop();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('意见反馈')),
+      appBar: AppBar(title: Text(l10n.feedbackTitle)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -113,10 +117,10 @@ class _FeedbackPageState extends State<FeedbackPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('说点什么', style: theme.textTheme.titleMedium),
+                  Text(l10n.feedbackHeading, style: theme.textTheme.titleMedium),
                   const SizedBox(height: 4),
                   Text(
-                    '用着别扭的地方、想要的功能，都可以写在这里。',
+                    l10n.feedbackIntro,
                     style: theme.textTheme.bodySmall,
                   ),
                   const SizedBox(height: 12),
@@ -127,9 +131,9 @@ class _FeedbackPageState extends State<FeedbackPage> {
                     minLines: 6,
                     maxLines: 10,
                     onChanged: (_) => setState(() {}),
-                    decoration: const InputDecoration(
-                      hintText: '例如：希望报表页能把每月数据导出成 CSV',
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      hintText: l10n.feedbackHint,
+                      border: const OutlineInputBorder(),
                       alignLabelWithHint: true,
                     ),
                   ),
@@ -145,10 +149,10 @@ class _FeedbackPageState extends State<FeedbackPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('图片（选填）', style: theme.textTheme.titleMedium),
+                  Text(l10n.imagesField, style: theme.textTheme.titleMedium),
                   const SizedBox(height: 4),
                   Text(
-                    '最多 ${FeedbackRepository.maxImages} 张，单张 2MB 以内',
+                    l10n.imagesLimit(FeedbackRepository.maxImages),
                     style: theme.textTheme.bodySmall,
                   ),
                   const SizedBox(height: 12),
@@ -180,7 +184,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                     width: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text('提交'),
+                : Text(l10n.submit),
           ),
         ],
       ),
@@ -189,6 +193,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
 
   Widget _thumbnail(int index) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Stack(
       children: [
         ClipRRect(
@@ -214,7 +219,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
             color: Colors.black54,
             shape: const CircleBorder(),
             child: Tooltip(
-              message: '移除这张图片',
+              message: l10n.removeImage,
               child: InkWell(
                 customBorder: const CircleBorder(),
                 onTap: _busy ? null : () => setState(() => _images.removeAt(index)),
@@ -232,8 +237,9 @@ class _FeedbackPageState extends State<FeedbackPage> {
 
   Widget _addButton() {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Tooltip(
-      message: '选择图片',
+      message: l10n.pickImage,
       child: InkWell(
         onTap: _busy ? null : _pickImages,
         borderRadius: BorderRadius.circular(10),
@@ -249,7 +255,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
             children: [
               Icon(Icons.add_photo_alternate_outlined, color: theme.colorScheme.primary),
               const SizedBox(height: 4),
-              Text('添加图片', style: theme.textTheme.bodySmall),
+              Text(l10n.addImage, style: theme.textTheme.bodySmall),
             ],
           ),
         ),

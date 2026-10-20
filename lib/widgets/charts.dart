@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
+import '../l10n/app_localizations.dart';
 import '../models/stats.dart';
 import '../models/txn.dart';
 
@@ -27,6 +28,7 @@ class SummaryCards extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -36,13 +38,13 @@ class SummaryCards extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
             child: Row(
               children: [
-                _cell(context, '支出', summary.expense, kExpense),
+                _cell(context, l10n.expense, summary.expense, kExpense),
                 _divider(context),
-                _cell(context, '收入', summary.income, kIncome),
+                _cell(context, l10n.income, summary.income, kIncome),
                 _divider(context),
                 _cell(
                   context,
-                  '结余',
+                  l10n.balance,
                   summary.balance,
                   summary.balance >= 0
                       ? kBalancePositive
@@ -56,7 +58,7 @@ class SummaryCards extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: 6, left: 4),
             child: Text(
-              '$subtitle · ${summary.count} 笔',
+              l10n.summarySubtitle(subtitle!, summary.count),
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
@@ -102,11 +104,12 @@ class CategoryPieCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final total = slices.fold<double>(0, (a, s) => a + s.amount);
     return _Card(
       title: title,
       child: slices.isEmpty || total <= 0
-          ? const _Empty(msg: '这段时间还没有数据')
+          ? const _Empty()
           : Column(
               children: [
                 SizedBox(
@@ -155,7 +158,7 @@ class CategoryPieCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Text(s.category.label),
+                        Text(l10n.categoryLabel(s.category.key)),
                         const Spacer(),
                         Text(
                           formatMoney(s.amount),
@@ -184,17 +187,20 @@ class TrendBarCard extends StatelessWidget {
     super.key,
     required this.title,
     required this.points,
-    required this.unitLabel,
+    required this.byDay,
     this.showIncome = true,
   });
 
   final String title;
   final List<TrendPoint> points;
-  final String unitLabel;
+
+  /// 横轴按日还是按月，只影响气泡提示里的单位。
+  final bool byDay;
   final bool showIncome;
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final labelStep = points.length > 16 ? 5 : 1;
     double maxValue(TrendPoint p) =>
         showIncome ? (p.expense > p.income ? p.expense : p.income) : p.expense;
@@ -208,7 +214,7 @@ class TrendBarCard extends StatelessWidget {
       child: SizedBox(
         height: 220,
         child: !hasData
-            ? const _Empty(msg: '这段时间还没有数据')
+            ? const _Empty()
             : BarChart(
                 BarChartData(
                   alignment: BarChartAlignment.spaceAround,
@@ -219,7 +225,11 @@ class TrendBarCard extends StatelessWidget {
                           Theme.of(context).colorScheme.inverseSurface,
                       getTooltipItem: (group, groupIndex, rod, rodIndex) =>
                           BarTooltipItem(
-                            '${group.x + 1}$unitLabel  ${rodIndex == 0 ? '支出' : '收入'}：${rod.toY.toStringAsFixed(2)}',
+                            l10n.tooltipLine(
+                              l10n.chartTick((group.x + 1).round(), byDay: byDay),
+                              rodIndex == 0 ? l10n.expense : l10n.income,
+                              rod.toY.toStringAsFixed(2),
+                            ),
                             const TextStyle(color: Colors.white, fontSize: 12),
                           ),
                     ),
@@ -239,7 +249,7 @@ class TrendBarCard extends StatelessWidget {
                         getTitlesWidget: (v, _) => Padding(
                           padding: const EdgeInsets.only(right: 6),
                           child: Text(
-                            _short(v),
+                            l10n.compactAmount(v),
                             style: const TextStyle(fontSize: 11),
                           ),
                         ),
@@ -297,12 +307,6 @@ class TrendBarCard extends StatelessWidget {
       ),
     );
   }
-
-  static String _short(double v) {
-    if (v >= 10000) return '${(v / 10000).toStringAsFixed(1)}万';
-    if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}k';
-    return v.toStringAsFixed(0);
-  }
 }
 
 /// 支出/收入图例说明
@@ -313,13 +317,14 @@ class LegendRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _dot(context, kExpense, '支出'),
+        _dot(context, kExpense, l10n.expense),
         if (showIncome) ...[
           const SizedBox(width: 16),
-          _dot(context, kIncome, '收入'),
+          _dot(context, kIncome, l10n.income),
         ],
       ],
     );
@@ -367,16 +372,17 @@ class _Card extends StatelessWidget {
 }
 
 class _Empty extends StatelessWidget {
-  const _Empty({required this.msg});
-
-  final String msg;
+  const _Empty();
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       height: 120,
       child: Center(
-        child: Text(msg, style: Theme.of(context).textTheme.bodyMedium),
+        child: Text(
+          AppLocalizations.of(context).chartEmpty,
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
       ),
     );
   }

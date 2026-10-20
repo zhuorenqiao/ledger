@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
+import '../l10n/app_localizations.dart';
 import '../models/txn.dart';
 import '../state/ledger_store.dart';
 import '../utils/run_guarded.dart';
@@ -44,29 +45,33 @@ class _RecordsPageState extends State<RecordsPage> {
   }
 
   Future<void> _confirmDelete(BuildContext context, Txn txn) async {
+    final l10n = AppLocalizations.of(context);
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('删除这笔记录？'),
-        content: Text('${txn.category.label}  ${formatMoney(txn.amount)}'),
+        title: Text(l10n.deleteTxnTitle),
+        content: Text(
+          '${l10n.categoryLabel(txn.categoryKey)}  ${formatMoney(txn.amount)}',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
+            child: Text(l10n.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('删除'),
+            child: Text(l10n.delete),
           ),
         ],
       ),
     );
     if (ok != true || !context.mounted) return;
-    await runGuarded(context, () => store.remove(txn), failure: '删除失败');
+    await runGuarded(context, () => store.remove(txn), failure: l10n.deleteFailed);
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return ListenableBuilder(
       listenable: store,
       builder: (context, _) {
@@ -77,7 +82,7 @@ class _RecordsPageState extends State<RecordsPage> {
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(24),
-              child: Text('读取服务器账单失败：${store.error}'),
+              child: Text(l10n.loadTxnsFailed(l10n.errorText(store.error!))),
             ),
           );
         }
@@ -91,7 +96,7 @@ class _RecordsPageState extends State<RecordsPage> {
           padding: const EdgeInsets.only(bottom: 80),
           itemCount: groups.length + 1,
           itemBuilder: (context, i) {
-            if (i == groups.length) return _footer();
+            if (i == groups.length) return _footer(context);
             return _daySection(context, groups[i]);
           },
         );
@@ -100,6 +105,7 @@ class _RecordsPageState extends State<RecordsPage> {
   }
 
   Widget _daySection(BuildContext context, DayGroup group) {
+    final l10n = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -109,11 +115,11 @@ class _RecordsPageState extends State<RecordsPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '${formatDay(group.day)} ${weekdayLabel(group.day)}',
+                l10n.formatDayWithWeekday(group.day),
                 style: Theme.of(context).textTheme.titleSmall,
               ),
               Text(
-                '支出 ${formatMoney(group.expense)}   收入 ${formatMoney(group.income)}',
+                l10n.dayTotals(formatMoney(group.expense), formatMoney(group.income)),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
@@ -145,7 +151,7 @@ class _RecordsPageState extends State<RecordsPage> {
                           size: 18, color: t.category.color),
                     ),
                     title: Text(
-                      t.category.label +
+                      l10n.categoryLabel(t.categoryKey) +
                           (t.note.isEmpty ? '' : ' · ${t.note}'),
                     ),
                     subtitle: Text(
@@ -170,7 +176,8 @@ class _RecordsPageState extends State<RecordsPage> {
     );
   }
 
-  Widget _footer() {
+  Widget _footer(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     if (store.loadingMore) {
       return const Padding(
         padding: EdgeInsets.all(16),
@@ -187,20 +194,23 @@ class _RecordsPageState extends State<RecordsPage> {
       return Center(
         child: TextButton(
           onPressed: () => store.loadMore(),
-          child: Text('加载失败，点击重试：${store.moreError}'),
+          child: Text(l10n.loadMoreFailed(l10n.errorText(store.moreError!))),
         ),
       );
     }
     if (!store.hasMore) {
-      return const Padding(
-        padding: EdgeInsets.all(16),
-        child: Center(child: Text('已经到底了', style: TextStyle(fontSize: 12))),
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Center(
+          child: Text(l10n.endOfList, style: const TextStyle(fontSize: 12)),
+        ),
       );
     }
     return const SizedBox(height: 24);
   }
 
   Widget _buildEmpty(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -213,12 +223,12 @@ class _RecordsPageState extends State<RecordsPage> {
               color: Theme.of(context).colorScheme.outline,
             ),
             const SizedBox(height: 12),
-            const Text('还没有任何账单'),
+            Text(l10n.emptyTitle),
             const SizedBox(height: 16),
             FilledButton.tonalIcon(
               onPressed: () => runGuarded(context, store.seedDemoData),
               icon: const Icon(Icons.auto_awesome),
-              label: const Text('载入示例数据，体验图表'),
+              label: Text(l10n.emptySeedCta),
             ),
           ],
         ),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../app_theme.dart';
 import '../auth/auth_session.dart';
 import '../data/api_client.dart';
+import '../l10n/app_localizations.dart';
 import '../utils/validators.dart';
 
 /// 个人中心：点头像换图，改显示名称与邮箱；登录账号只读。
@@ -46,22 +47,23 @@ class _ProfilePageState extends State<ProfilePage> {
     super.dispose();
   }
 
-  String? _validate() {
+  String? _validate(AppLocalizations l10n) {
     final nickname = _nickname.text.trim();
-    if (nickname.isEmpty) return '显示名称不能为空';
-    if (nickname.length > 32) return '显示名称最多 32 个字符';
+    if (nickname.isEmpty) return l10n.nicknameRequired;
+    if (nickname.length > 32) return l10n.nicknameTooLong;
     final email = _email.text.trim();
-    if (email.length > 255) return '邮箱最多 255 个字符';
-    if (email.isNotEmpty && !emailPattern.hasMatch(email)) return '邮箱格式不正确';
+    if (email.length > 255) return l10n.emailTooLong;
+    if (email.isNotEmpty && !emailPattern.hasMatch(email)) return l10n.emailInvalid;
     final phone = _phone.text.trim();
     if (phone.isNotEmpty && !cnMobilePattern.hasMatch(phone)) {
-      return '手机号要填 11 位中国大陆号码，或者留空';
+      return l10n.mobileInvalid;
     }
     return null;
   }
 
   Future<void> _save() async {
-    final message = _validate();
+    final l10n = AppLocalizations.of(context);
+    final message = _validate(l10n);
     if (message != null) {
       setState(() => _error = message);
       return;
@@ -80,16 +82,17 @@ class _ProfilePageState extends State<ProfilePage> {
       );
       saved = true;
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted) setState(() => _error = l10n.errorText(e));
     }
     if (!mounted) return;
     setState(() => _busy = false);
     if (!saved) return;
-    messenger.showSnackBar(const SnackBar(content: Text('资料已更新')));
+    messenger.showSnackBar(SnackBar(content: Text(l10n.profileSaved)));
     Navigator.of(context).pop();
   }
 
   Future<void> _pickAndUpload() async {
+    final l10n = AppLocalizations.of(context);
     final file = await FilePicker.pickFile(type: FileType.image);
     if (file == null || !mounted) return; // null 表示用户取消了选择
     final messenger = ScaffoldMessenger.of(context);
@@ -100,12 +103,12 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       final bytes = await file.readAsBytes();
       if (bytes.length > _maxAvatarBytes) {
-        throw const ApiException('图片超过 2MB，换一张小一点的');
+        throw ApiException(l10n.avatarTooBig);
       }
       await widget.session.uploadAvatar(bytes: bytes, filename: file.name);
-      messenger.showSnackBar(const SnackBar(content: Text('头像已更新')));
+      messenger.showSnackBar(SnackBar(content: Text(l10n.avatarUpdated)));
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted) setState(() => _error = l10n.errorText(e));
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
@@ -113,6 +116,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Widget _avatar(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final url = widget.session.avatarUrl;
     Widget? placeholder;
     if (_uploading) {
@@ -137,7 +141,7 @@ class _ProfilePageState extends State<ProfilePage> {
               onTap: _uploading ? null : _pickAndUpload,
               customBorder: const CircleBorder(),
               child: Tooltip(
-                message: '点击更换头像',
+                message: l10n.avatarTooltip,
                 child: CircleAvatar(
                   radius: 26,
                   backgroundColor: kPrimary,
@@ -175,8 +179,9 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('个人中心')),
+      appBar: AppBar(title: Text(l10n.profileTitle)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -201,7 +206,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '登录账号 ${_profile.username}，不可修改',
+                          l10n.accountReadonly(_profile.username),
                           style: theme.textTheme.bodySmall,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -220,16 +225,16 @@ class _ProfilePageState extends State<ProfilePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('资料设置', style: theme.textTheme.titleMedium),
+                  Text(l10n.profileSection, style: theme.textTheme.titleMedium),
                   const SizedBox(height: 16),
                   TextField(
                     controller: _nickname,
                     enabled: !_busy,
                     maxLength: 32,
                     onChanged: _onChanged,
-                    decoration: const InputDecoration(
-                      labelText: '显示名称',
-                      hintText: '账单与菜单里展示的名字',
+                    decoration: InputDecoration(
+                      labelText: l10n.displayNameField,
+                      hintText: l10n.displayNameHint,
                     ),
                     onSubmitted: (_) => _save(),
                   ),
@@ -240,9 +245,9 @@ class _ProfilePageState extends State<ProfilePage> {
                     keyboardType: TextInputType.phone,
                     maxLength: 11,
                     onChanged: _onChanged,
-                    decoration: const InputDecoration(
-                      labelText: '手机号',
-                      hintText: '中国大陆 11 位，可留空',
+                    decoration: InputDecoration(
+                      labelText: l10n.phoneField,
+                      hintText: l10n.phoneHint,
                     ),
                     onSubmitted: (_) => _save(),
                   ),
@@ -252,9 +257,9 @@ class _ProfilePageState extends State<ProfilePage> {
                     enabled: !_busy,
                     keyboardType: TextInputType.emailAddress,
                     onChanged: _onChanged,
-                    decoration: const InputDecoration(
-                      labelText: '邮箱',
-                      hintText: '可留空',
+                    decoration: InputDecoration(
+                      labelText: l10n.emailField,
+                      hintText: l10n.optional,
                     ),
                     onSubmitted: (_) => _save(),
                   ),
@@ -277,7 +282,7 @@ class _ProfilePageState extends State<ProfilePage> {
                             width: 18,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Text('保存'),
+                        : Text(l10n.save),
                   ),
                 ],
               ),

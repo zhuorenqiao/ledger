@@ -40,6 +40,12 @@ dependencies:
   fl_chart: ^1.2.0
   shared_preferences: ^2.5.5
   file_picker: ^13.1.0
+  flutter_localizations:
+    sdk: flutter
+  # flutter_localizations 会传递依赖 intl；这里显式声明是为了把版本钉在与
+  # flutter_localizations 兼容的区间，并为将来改用 DateFormat/NumberFormat 预留。
+  # 当前日期/数字格式是手写的，暂未 import intl。
+  intl: ^0.20.3
 
 dev_dependencies:
   flutter_test:

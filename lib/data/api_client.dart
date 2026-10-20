@@ -7,11 +7,15 @@ typedef FormFile = ({String filename, Uint8List bytes});
 
 /// 后端返回的业务错误：`code` 是统一响应体里的业务码，`statusCode` 是 HTTP 状态。
 class ApiException implements Exception {
-  const ApiException(this.message, {this.code, this.statusCode});
+  const ApiException(this.message, {this.code, this.statusCode, this.kind});
 
   final String message;
   final int? code;
   final int? statusCode;
+
+  /// 客户端自己造的错误类别（network / http / generic）。为 null 表示文案来自后端，
+  /// 界面按原文展示，前端不翻译后端话术。
+  final String? kind;
 
   bool get unauthorized => statusCode == 401;
 
@@ -98,7 +102,18 @@ class ApiClient {
     } on DioException catch (e) {
       final status = e.response?.statusCode;
       if (status == 401) onUnauthorized?.call();
-      throw ApiException(_messageOf(e, status), code: _codeOf(e), statusCode: status);
+      final data = e.response?.data;
+      final serverMessage = data is Map ? data['message'] : null;
+      if (serverMessage is String && serverMessage.isNotEmpty) {
+        throw ApiException(serverMessage, code: _codeOf(e), statusCode: status);
+      }
+      final (message, kind) = _clientError(e, status);
+      throw ApiException(
+        message,
+        code: _codeOf(e),
+        statusCode: status,
+        kind: kind,
+      );
     }
   }
 
@@ -114,16 +129,15 @@ class ApiClient {
     return code is num ? code.toInt() : null;
   }
 
-  static String _messageOf(DioException e, int? status) {
-    final data = e.response?.data;
-    if (data is Map && data['message'] is String) return data['message'] as String;
+  /// 没有后端话术时，前端自己兜一句中文，并标出类别让界面按语言改写。
+  static (String, String) _clientError(DioException e, int? status) {
     if (e.type == DioExceptionType.connectionTimeout ||
         e.type == DioExceptionType.receiveTimeout ||
         e.type == DioExceptionType.connectionError) {
-      return '连不上服务器，请检查后端是否已启动';
+      return ('连不上服务器，请检查后端是否已启动', 'network');
     }
-    if (status != null) return '请求失败（HTTP $status）';
-    return e.message ?? '请求失败';
+    if (status != null) return ('请求失败（HTTP $status）', 'http');
+    return (e.message ?? '请求失败', 'generic');
   }
 
   static Map<String, dynamic>? _clean(Map<String, dynamic>? query) {

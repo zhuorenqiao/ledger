@@ -6,7 +6,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   test('默认跟随系统', () {
     expect(ThemeModeController.defaults().mode, ThemeMode.system);
-    expect(ThemeModeController.defaults().label, '跟随系统');
   });
 
   test('restore 读回上次选择', () async {
@@ -26,7 +25,6 @@ void main() {
     await controller.setMode(ThemeMode.light);
 
     expect(controller.mode, ThemeMode.light);
-    expect(controller.label, '浅色');
     expect(notifications, 1);
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString('ui.themeMode'), 'light');

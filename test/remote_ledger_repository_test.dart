@@ -150,7 +150,7 @@ void main() {
     expect(summary.expense, 120.5);
     expect(summary.count, 7);
     expect(summary.expenseByCategory.first.category.key, 'food');
-    expect(summary.incomeByCategory.single.category.label, '工资');
+    expect(summary.incomeByCategory.single.category.key, 'salary');
   });
 
   test('趋势接口还原成连续刻度', () async {

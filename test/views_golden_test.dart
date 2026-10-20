@@ -1,22 +1,42 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:ledger_front/app_theme.dart';
 import 'package:ledger_front/auth/auth_session.dart';
 import 'package:ledger_front/data/ledger_repository.dart';
-import 'package:ledger_front/models/txn.dart' show formatDay;
+import 'package:ledger_front/l10n/app_localizations.dart';
 import 'package:ledger_front/pages/add_txn_page.dart';
 import 'package:ledger_front/pages/analytics_page.dart';
 import 'package:ledger_front/pages/home_page.dart';
 import 'package:ledger_front/pages/login_page.dart';
 import 'package:ledger_front/pages/records_page.dart';
 import 'package:ledger_front/state/ledger_store.dart';
+import 'package:ledger_front/state/locale_controller.dart';
 import 'package:ledger_front/state/theme_mode_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-Widget _wrap(Widget child) => MaterialApp(
-  theme: buildAppTheme(),
-  home: Scaffold(body: child),
-);
+/// 和线上一样挂双语 delegate，默认中文：报表、图表文案都来自 AppLocalizations。
+Widget _wrapApp({
+  required Widget home,
+  ThemeData? darkTheme,
+  ThemeMode themeMode = ThemeMode.system,
+}) =>
+    MaterialApp(
+      theme: buildAppTheme(),
+      darkTheme: darkTheme,
+      themeMode: themeMode,
+      locale: const Locale('zh'),
+      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      home: home,
+    );
+
+Widget _wrap(Widget child) => _wrapApp(home: Scaffold(body: child));
 
 Future<LedgerStore> _seededStore() async {
   SharedPreferences.setMockInitialValues({});
@@ -102,9 +122,13 @@ void main() {
     final session = await AuthSession.restore();
 
     await tester.pumpWidget(
-      MaterialApp(
-        theme: buildAppTheme(),
-        home: HomePage(store: store, session: session, theme: ThemeModeController.defaults()),
+      _wrapApp(
+        home: HomePage(
+          store: store,
+          session: session,
+          theme: ThemeModeController.defaults(),
+          locale: LocaleController.defaults(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -122,11 +146,15 @@ void main() {
     await theme.setMode(ThemeMode.dark);
 
     await tester.pumpWidget(
-      MaterialApp(
-        theme: buildAppTheme(),
+      _wrapApp(
         darkTheme: buildDarkAppTheme(),
         themeMode: theme.mode,
-        home: HomePage(store: store, session: session, theme: theme),
+        home: HomePage(
+          store: store,
+          session: session,
+          theme: theme,
+          locale: LocaleController.defaults(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -140,9 +168,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     final session = await AuthSession.restore();
 
-    await tester.pumpWidget(
-      MaterialApp(theme: buildAppTheme(), home: LoginPage(session: session)),
-    );
+    await tester.pumpWidget(_wrapApp(home: LoginPage(session: session)));
     await tester.pumpAndSettle();
 
     await expectLater(find.byType(LoginPage), matchesGoldenFile('goldens/login.png'));
@@ -155,11 +181,10 @@ void main() {
     final store = LedgerStore(SharedPreferencesRepository());
     await store.load();
 
-    await tester.pumpWidget(
-      MaterialApp(theme: buildAppTheme(), home: AddTxnPage(store: store)),
-    );
+    await tester.pumpWidget(_wrap(AddTxnPage(store: store)));
     await tester.pumpAndSettle();
 
+    final l10n = AppLocalizations(const Locale('zh'));
     final now = DateTime.now();
     final tomorrow = now.add(const Duration(days: 1));
     final inMonthDay = now.subtract(const Duration(days: 3));
@@ -175,9 +200,10 @@ void main() {
       await tester.tap(tomorrowCell, warnIfMissed: false);
       await tester.pumpAndSettle();
     }
-    await tester.tap(find.text('OK'));
+    // 挂上 GlobalMaterialLocalizations 且语言为中文后，日期选择器按钮是「确定」
+    await tester.tap(find.text('确定'));
     await tester.pumpAndSettle();
-    expect(find.text(formatDay(now)), findsOne);
+    expect(find.text(l10n.formatDay(now)), findsOne);
 
     // 过去的日期可以正常选择
     await tester.tap(find.text('日期'));
@@ -189,9 +215,9 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('OK'));
+    await tester.tap(find.text('确定'));
     await tester.pumpAndSettle();
-    expect(find.text(formatDay(inMonthDay)), findsOne);
+    expect(find.text(l10n.formatDay(inMonthDay)), findsOne);
     expect(tester.takeException(), isNull);
   });
 

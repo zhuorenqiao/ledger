@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/txn.dart';
 import '../state/ledger_store.dart';
 
@@ -46,11 +47,11 @@ class _AddTxnPageState extends State<AddTxnPage> {
   }
 
   Future<void> _save() async {
+    final l10n = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
     final amount = double.tryParse(_amountCtrl.text.trim());
     if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入大于 0 的金额')),
-      );
+      messenger.showSnackBar(SnackBar(content: Text(l10n.amountInvalid)));
       return;
     }
     setState(() => _saving = true);
@@ -68,37 +69,45 @@ class _AddTxnPageState extends State<AddTxnPage> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('保存失败：$e')));
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.saveFailed(l10n.errorText(e)))),
+      );
       return;
     }
     if (!mounted) return;
     Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已记录 ${_type.name == 'expense' ? '支出' : '收入'} ${formatMoney(amount)}')),
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          l10n.savedToast(
+            _type == TxnType.expense ? l10n.expense : l10n.income,
+            formatMoney(amount),
+          ),
+        ),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final cats = categoriesOf(_type);
     return Scaffold(
-      appBar: AppBar(title: const Text('记一笔')),
+      appBar: AppBar(title: Text(l10n.addEntry)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           SegmentedButton<TxnType>(
-            segments: const [
+            segments: [
               ButtonSegment(
                 value: TxnType.expense,
-                label: Text('支出'),
-                icon: Icon(Icons.arrow_upward),
+                label: Text(l10n.expense),
+                icon: const Icon(Icons.arrow_upward),
               ),
               ButtonSegment(
                 value: TxnType.income,
-                label: Text('收入'),
-                icon: Icon(Icons.arrow_downward),
+                label: Text(l10n.income),
+                icon: const Icon(Icons.arrow_downward),
               ),
             ],
             selected: {_type},
@@ -128,7 +137,7 @@ class _AddTxnPageState extends State<AddTxnPage> {
             ),
           ),
           const SizedBox(height: 20),
-          Text('分类', style: Theme.of(context).textTheme.titleMedium),
+          Text(l10n.categoryField, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           Wrap(
             spacing: 10,
@@ -137,7 +146,11 @@ class _AddTxnPageState extends State<AddTxnPage> {
               for (final c in cats)
                 _CategoryChip(
                   category: c,
+                  label: l10n.categoryLabel(c.key),
                   selected: c.key == _categoryKey,
+                  // 英文分类名比中文长，粗体选中态可能顶到 68px 芯片边；中文一律两字，
+                  // 保持 maxLines/overflow 为 null（默认值）以维持既有像素不变。
+                  singleLine: l10n.locale.languageCode == 'en',
                   onTap: () => setState(() => _categoryKey = c.key),
                 ),
             ],
@@ -149,8 +162,8 @@ class _AddTxnPageState extends State<AddTxnPage> {
               children: [
                 ListTile(
                   leading: const Icon(Icons.event),
-                  title: const Text('日期'),
-                  trailing: Text(formatDay(_day)),
+                  title: Text(l10n.dateField),
+                  trailing: Text(l10n.formatDay(_day)),
                   onTap: _pickDay,
                 ),
                 const Divider(height: 1),
@@ -158,10 +171,10 @@ class _AddTxnPageState extends State<AddTxnPage> {
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   child: TextField(
                     controller: _noteCtrl,
-                    decoration: const InputDecoration(
-                      icon: Icon(Icons.edit_note),
+                    decoration: InputDecoration(
+                      icon: const Icon(Icons.edit_note),
                       border: InputBorder.none,
-                      hintText: '备注（可选）',
+                      hintText: l10n.noteHint,
                     ),
                   ),
                 ),
@@ -174,7 +187,7 @@ class _AddTxnPageState extends State<AddTxnPage> {
             style: FilledButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 16),
             ),
-            child: Text(_saving ? '保存中…' : '保存'),
+            child: Text(_saving ? l10n.saving : l10n.save),
           ),
         ],
       ),
@@ -185,13 +198,20 @@ class _AddTxnPageState extends State<AddTxnPage> {
 class _CategoryChip extends StatelessWidget {
   const _CategoryChip({
     required this.category,
+    required this.label,
     required this.selected,
     required this.onTap,
+    this.singleLine = false,
   });
 
   final TxnCategory category;
+  final String label;
   final bool selected;
   final VoidCallback onTap;
+
+  /// 为 true 时把文字限制成一行并省略号截断，避免英文长词溢出撑高芯片。
+  /// 为 false（中文）时 maxLines/overflow 都留 null，与默认渲染完全一致。
+  final bool singleLine;
 
   @override
   Widget build(BuildContext context) {
@@ -212,7 +232,9 @@ class _CategoryChip extends StatelessWidget {
             Icon(category.icon, color: selected ? category.color : null),
             const SizedBox(height: 4),
             Text(
-              category.label,
+              label,
+              maxLines: singleLine ? 1 : null,
+              overflow: singleLine ? TextOverflow.ellipsis : null,
               style: TextStyle(
                 fontSize: 12,
                 color: selected ? category.color : null,

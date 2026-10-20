@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../auth/auth_session.dart';
 import '../app_theme.dart';
+import '../l10n/app_localizations.dart';
 import '../state/ledger_store.dart';
+import '../state/locale_controller.dart';
 import '../state/theme_mode_controller.dart';
 import '../utils/run_guarded.dart';
 import 'add_txn_page.dart';
@@ -17,11 +19,13 @@ class HomePage extends StatefulWidget {
     required this.store,
     required this.session,
     required this.theme,
+    required this.locale,
   });
 
   final LedgerStore store;
   final AuthSession session;
   final ThemeModeController theme;
+  final LocaleController locale;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -50,6 +54,8 @@ class _HomePageState extends State<HomePage> {
         _clearAll();
       case 'theme':
         _pickThemeMode();
+      case 'locale':
+        _pickLocale();
       case 'feedback':
         Navigator.push(
           context,
@@ -60,19 +66,19 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  static const _themeChoices = <(ThemeMode, String, IconData)>[
-    (ThemeMode.system, '跟随系统', Icons.brightness_auto),
-    (ThemeMode.light, '浅色', Icons.light_mode),
-    (ThemeMode.dark, '深色', Icons.dark_mode),
-  ];
-
   Future<void> _pickThemeMode() async {
+    final l10n = AppLocalizations.of(context);
+    final choices = <(ThemeMode, String, IconData)>[
+      (ThemeMode.system, l10n.themeSystem, Icons.brightness_auto),
+      (ThemeMode.light, l10n.themeLight, Icons.light_mode),
+      (ThemeMode.dark, l10n.themeDark, Icons.dark_mode),
+    ];
     final picked = await showDialog<ThemeMode>(
       context: context,
       builder: (context) => SimpleDialog(
-        title: const Text('切换主题'),
+        title: Text(l10n.themeDialogTitle),
         children: [
-          for (final (mode, label, icon) in _themeChoices)
+          for (final (mode, label, icon) in choices)
             ListTile(
               dense: true,
               leading: Icon(icon),
@@ -88,20 +94,47 @@ class _HomePageState extends State<HomePage> {
     if (picked != null) await widget.theme.setMode(picked);
   }
 
+  Future<void> _pickLocale() async {
+    final l10n = AppLocalizations.of(context);
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: Text(l10n.languageDialogTitle),
+        children: [
+          for (final code in LocaleController.supportedCodes)
+            ListTile(
+              dense: true,
+              leading: Icon(
+                code == widget.locale.code
+                    ? Icons.check_circle
+                    : Icons.radio_button_unchecked,
+                color: code == widget.locale.code ? kPrimary : null,
+              ),
+              // 语言名固定用本语言书写，切英文时菜单里仍显示「简体中文」
+              title: Text(l10n.languageName(code)),
+              onTap: () => Navigator.pop(context, code),
+            ),
+        ],
+      ),
+    );
+    if (picked != null) await widget.locale.setCode(picked);
+  }
+
   Future<void> _clearAll() async {
+    final l10n = AppLocalizations.of(context);
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('清空所有账单？'),
-        content: const Text('服务器上的全部账单记录会被删除，此操作不可撤销。'),
+        title: Text(l10n.clearDialogTitle),
+        content: Text(l10n.clearDialogBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
+            child: Text(l10n.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('清空'),
+            child: Text(l10n.clear),
           ),
         ],
       ),
@@ -112,36 +145,37 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: Text(_index == 0 ? '我的账本' : '收支报表'),
+        title: Text(_index == 0 ? l10n.homeTitle : l10n.analyticsTitle),
         actions: [
           PopupMenuButton<String>(
             onSelected: _onMenu,
             itemBuilder: (context) => [
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'profile',
                 child: ListTile(
                   dense: true,
-                  leading: Icon(Icons.person_outline),
-                  title: Text('个人中心'),
+                  leading: const Icon(Icons.person_outline),
+                  title: Text(l10n.menuProfile),
                 ),
               ),
               const PopupMenuDivider(),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'seed',
                 child: ListTile(
                   dense: true,
-                  leading: Icon(Icons.auto_awesome),
-                  title: Text('载入示例数据'),
+                  leading: const Icon(Icons.auto_awesome),
+                  title: Text(l10n.menuSeed),
                 ),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'clear',
                 child: ListTile(
                   dense: true,
-                  leading: Icon(Icons.delete_sweep),
-                  title: Text('清空账单'),
+                  leading: const Icon(Icons.delete_sweep),
+                  title: Text(l10n.menuClear),
                 ),
               ),
               PopupMenuItem(
@@ -149,15 +183,23 @@ class _HomePageState extends State<HomePage> {
                 child: ListTile(
                   dense: true,
                   leading: const Icon(Icons.palette_outlined),
-                  title: Text('切换主题（${widget.theme.label}）'),
+                  title: Text(l10n.menuTheme(l10n.themeModeName(widget.theme.mode))),
                 ),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
+                value: 'locale',
+                child: ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.translate),
+                  title: Text(l10n.menuLanguage(l10n.languageName(widget.locale.code))),
+                ),
+              ),
+              PopupMenuItem(
                 value: 'feedback',
                 child: ListTile(
                   dense: true,
-                  leading: Icon(Icons.feedback_outlined),
-                  title: Text('意见反馈'),
+                  leading: const Icon(Icons.feedback_outlined),
+                  title: Text(l10n.menuFeedback),
                 ),
               ),
               PopupMenuItem(
@@ -165,7 +207,7 @@ class _HomePageState extends State<HomePage> {
                 child: ListTile(
                   dense: true,
                   leading: const Icon(Icons.logout),
-                  title: Text('退出登录（${widget.session.displayName}）'),
+                  title: Text(l10n.menuSignOut(widget.session.displayName)),
                 ),
               ),
             ],
@@ -182,19 +224,19 @@ class _HomePageState extends State<HomePage> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openAdd,
         icon: const Icon(Icons.add),
-        label: const Text('记一笔'),
+        label: Text(l10n.addEntry),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: const [
+        destinations: [
           NavigationDestination(
-            icon: Icon(Icons.receipt_long),
-            label: '流水',
+            icon: const Icon(Icons.receipt_long),
+            label: l10n.navRecords,
           ),
           NavigationDestination(
-            icon: Icon(Icons.pie_chart),
-            label: '报表',
+            icon: const Icon(Icons.pie_chart),
+            label: l10n.navAnalytics,
           ),
         ],
       ),

@@ -10,6 +10,7 @@ import 'package:ledger_front/pages/feedback_page.dart';
 import 'package:ledger_front/pages/login_page.dart';
 import 'package:ledger_front/pages/records_page.dart';
 import 'package:ledger_front/state/ledger_store.dart';
+import 'package:ledger_front/state/locale_controller.dart';
 import 'package:ledger_front/state/theme_mode_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -95,6 +96,42 @@ void main() {
     );
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString('ui.themeMode'), 'dark');
+  });
+
+  testWidgets('从右上角菜单切换英文界面', (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'auth.token': 'jwt',
+      'auth.user': jsonEncode({'id': 1, 'username': 'ren', 'nickname': '仁'}),
+    });
+    final session = await AuthSession.restore();
+    final locale = await LocaleController.restore();
+
+    await tester.pumpWidget(
+      LedgerApp(
+        session: session,
+        locale: locale,
+        storeFactory: (_) => LedgerStore(SharedPreferencesRepository()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('切换语言（简体中文）'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('English'));
+    await tester.pumpAndSettle();
+
+    expect(locale.code, 'en');
+    expect(
+      tester.widget<MaterialApp>(find.byType(MaterialApp).first).locale,
+      const Locale('en'),
+    );
+    expect(find.text('My Ledger'), findsOne);
+    expect(find.text('Add entry'), findsOne);
+    expect(find.text('记一笔'), findsNothing);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('ui.locale'), 'en');
   });
 
   testWidgets('从右上角菜单进入意见反馈', (tester) async {

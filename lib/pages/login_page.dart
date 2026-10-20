@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_theme.dart';
 import '../data/api_client.dart';
 import '../auth/auth_session.dart';
+import '../l10n/app_localizations.dart';
 import '../utils/validators.dart';
 
 /// 登录 / 注册页：拿到后端签发的 JWT 后才能进入账本。
@@ -41,21 +42,22 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _submit() async {
+    final l10n = AppLocalizations.of(context);
     final username = _username.text.trim();
     final password = _password.text;
     if (username.isEmpty || password.isEmpty) {
-      setState(() => _error = '请填写用户名和密码');
+      setState(() => _error = l10n.credentialsRequired);
       return;
     }
     if (_registerMode) {
       final phone = _phone.text.trim();
       if (phone.isNotEmpty && !cnMobilePattern.hasMatch(phone)) {
-        setState(() => _error = '手机号要填 11 位中国大陆号码，或者留空');
+        setState(() => _error = l10n.mobileInvalid);
         return;
       }
       final email = _email.text.trim();
       if (email.isNotEmpty && !emailPattern.hasMatch(email)) {
-        setState(() => _error = '邮箱格式不正确，或者留空');
+        setState(() => _error = l10n.emailInvalidOrBlank);
         return;
       }
     }
@@ -77,7 +79,7 @@ class _LoginPageState extends State<LoginPage> {
         await widget.session.login(username, password);
       }
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted) setState(() => _error = l10n.errorText(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -86,6 +88,7 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       body: DecoratedBox(
         decoration: BoxDecoration(
@@ -115,34 +118,32 @@ class _LoginPageState extends State<LoginPage> {
                               color: theme.colorScheme.primary,
                             ),
                             const SizedBox(width: 8),
-                            Text('记账本', style: theme.textTheme.titleLarge),
+                            Text(l10n.appTitle, style: theme.textTheme.titleLarge),
                           ],
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          _registerMode
-                              ? '注册后账单保存在服务器 MySQL'
-                              : '使用已有账号查看服务器上的账本',
+                          _registerMode ? l10n.registerSubtitle : l10n.loginSubtitle,
                           style: theme.textTheme.bodySmall,
                         ),
                         const SizedBox(height: 16),
                         TextField(
                           controller: _server,
-                          decoration: const InputDecoration(labelText: '服务器地址'),
+                          decoration: InputDecoration(labelText: l10n.serverUrlField),
                           keyboardType: TextInputType.url,
                           enabled: !_busy,
                         ),
                         const SizedBox(height: 12),
                         TextField(
                           controller: _username,
-                          decoration: const InputDecoration(labelText: '用户名'),
+                          decoration: InputDecoration(labelText: l10n.usernameField),
                           enabled: !_busy,
                           onSubmitted: (_) => _submit(),
                         ),
                         const SizedBox(height: 12),
                         TextField(
                           controller: _password,
-                          decoration: const InputDecoration(labelText: '密码'),
+                          decoration: InputDecoration(labelText: l10n.passwordField),
                           obscureText: true,
                           enabled: !_busy,
                           onSubmitted: (_) => _submit(),
@@ -151,18 +152,16 @@ class _LoginPageState extends State<LoginPage> {
                           const SizedBox(height: 12),
                           TextField(
                             controller: _nickname,
-                            decoration: const InputDecoration(
-                              labelText: '昵称（可选）',
-                            ),
+                            decoration: InputDecoration(labelText: l10n.nicknameOptional),
                             enabled: !_busy,
                             onSubmitted: (_) => _submit(),
                           ),
                           const SizedBox(height: 12),
                           TextField(
                             controller: _phone,
-                            decoration: const InputDecoration(
-                              labelText: '手机号（可选）',
-                              hintText: '中国大陆 11 位',
+                            decoration: InputDecoration(
+                              labelText: l10n.phoneOptional,
+                              hintText: l10n.cnMobileHint,
                             ),
                             keyboardType: TextInputType.phone,
                             maxLength: 11,
@@ -172,9 +171,7 @@ class _LoginPageState extends State<LoginPage> {
                           const SizedBox(height: 12),
                           TextField(
                             controller: _email,
-                            decoration: const InputDecoration(
-                              labelText: '邮箱（可选）',
-                            ),
+                            decoration: InputDecoration(labelText: l10n.emailOptional),
                             keyboardType: TextInputType.emailAddress,
                             enabled: !_busy,
                             onSubmitted: (_) => _submit(),
@@ -202,7 +199,7 @@ class _LoginPageState extends State<LoginPage> {
                                     strokeWidth: 2,
                                   ),
                                 )
-                              : Text(_registerMode ? '注册并登录' : '登录'),
+                              : Text(_registerMode ? l10n.registerCta : l10n.loginCta),
                         ),
                         TextButton(
                           onPressed: _busy
@@ -211,7 +208,7 @@ class _LoginPageState extends State<LoginPage> {
                                   _registerMode = !_registerMode;
                                   _error = null;
                                 }),
-                          child: Text(_registerMode ? '已有账号，去登录' : '还没有账号？去注册'),
+                          child: Text(_registerMode ? l10n.toLogin : l10n.toRegister),
                         ),
                       ],
                     ),

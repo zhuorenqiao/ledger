@@ -1,12 +1,20 @@
 import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
+import '../l10n/app_localizations.dart';
 import '../models/stats.dart';
 import '../models/txn.dart';
 import '../state/ledger_store.dart';
 import '../widgets/charts.dart';
 
 const _segmentLabelStyle = TextStyle(fontSize: 13, fontWeight: FontWeight.w600);
+
+/// 月度对比条的标签：后端 label 通常是「1」~「12」的月份数字，能解析就本地化成
+/// 「N月 / Mon」；万一格式变了解析不出来，直接展示原始 label，而不是错误地兜底成 1 月。
+String _monthBarLabel(AppLocalizations l10n, String raw) {
+  final month = int.tryParse(raw);
+  return month == null ? raw : l10n.monthLabel(month);
+}
 
 class AnalyticsPage extends StatefulWidget {
   const AnalyticsPage({super.key, required this.store, required this.onAdd});
@@ -27,6 +35,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Column(
       children: [
         Container(
@@ -35,36 +44,36 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
             child: SegmentedButton<int>(
               expandedInsets: EdgeInsets.zero,
-              segments: const [
+              segments: [
                 ButtonSegment(
                   value: 0,
                   label: Text(
-                    '每日',
+                    l10n.segDaily,
                     maxLines: 1,
                     softWrap: false,
                     style: _segmentLabelStyle,
                   ),
-                  icon: Icon(Icons.ac_unit, size: 18),
+                  icon: const Icon(Icons.ac_unit, size: 18),
                 ),
                 ButtonSegment(
                   value: 1,
                   label: Text(
-                    '每月',
+                    l10n.segMonthly,
                     maxLines: 1,
                     softWrap: false,
                     style: _segmentLabelStyle,
                   ),
-                  icon: Icon(Icons.calendar_month, size: 18),
+                  icon: const Icon(Icons.calendar_month, size: 18),
                 ),
                 ButtonSegment(
                   value: 2,
                   label: Text(
-                    '每年',
+                    l10n.segYearly,
                     maxLines: 1,
                     softWrap: false,
                     style: _segmentLabelStyle,
                   ),
-                  icon: Icon(Icons.calendar_today, size: 18),
+                  icon: const Icon(Icons.calendar_today, size: 18),
                 ),
               ],
               selected: {_tab},
@@ -209,6 +218,7 @@ class _DailyViewState extends State<_DailyView> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final today = dayKey(DateTime.now());
     final day = widget.day;
     final txns = _txns;
@@ -217,7 +227,7 @@ class _DailyViewState extends State<_DailyView> {
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 80),
       children: [
         _RangePickerBar(
-          label: '${formatDay(day)} ${weekdayLabel(day)}',
+          label: l10n.formatDayWithWeekday(day),
           onPrev: () => widget.onDayChanged(day.subtract(const Duration(days: 1))),
           onNext: () {
             final next = day.add(const Duration(days: 1));
@@ -227,12 +237,12 @@ class _DailyViewState extends State<_DailyView> {
           isMaxReached: dayKey(day).compareTo(today) >= 0,
         ),
         const SizedBox(height: 8),
-        SummaryCards(summary: summary, subtitle: formatDay(day)),
+        SummaryCards(summary: summary, subtitle: l10n.formatDay(day)),
         const SizedBox(height: 12),
-        CategoryPieCard(title: '当日支出构成', slices: summary.expenseByCategory),
+        CategoryPieCard(title: l10n.dailyExpensePie, slices: summary.expenseByCategory),
         const SizedBox(height: 12),
         if (summary.incomeByCategory.isNotEmpty) ...[
-          CategoryPieCard(title: '当日收入构成', slices: summary.incomeByCategory),
+          CategoryPieCard(title: l10n.dailyIncomePie, slices: summary.incomeByCategory),
           const SizedBox(height: 12),
         ],
         Card(
@@ -242,12 +252,12 @@ class _DailyViewState extends State<_DailyView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('当日流水', style: Theme.of(context).textTheme.titleMedium),
+                Text(l10n.dailyFlow, style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 8),
                 if (txns.isEmpty)
                   TextButton(
                     onPressed: widget.onAdd,
-                    child: const Text('今天还没有记账，点我去记一笔'),
+                    child: Text(l10n.dailyEmptyCta),
                   )
                 else
                   for (final t in txns) _TxnRow(txn: t),
@@ -319,6 +329,7 @@ class _MonthlyViewState extends State<_MonthlyView> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final nowMonth = DateTime(DateTime.now().year, DateTime.now().month);
     final month = widget.month;
     final summary = _summary;
@@ -331,7 +342,7 @@ class _MonthlyViewState extends State<_MonthlyView> {
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 80),
       children: [
         _RangePickerBar(
-          label: formatMonth(month),
+          label: l10n.formatMonth(month),
           onPrev: () => widget.onMonthChanged(DateTime(month.year, month.month - 1)),
           onNext: () => widget.onMonthChanged(DateTime(month.year, month.month + 1)),
           onPick: () => _pick(context),
@@ -340,22 +351,22 @@ class _MonthlyViewState extends State<_MonthlyView> {
         const SizedBox(height: 8),
         SummaryCards(
           summary: summary,
-          subtitle: '日均支出 ${formatMoney(summary.expense / daysInMonth)}',
+          subtitle: l10n.avgPerDay(formatMoney(summary.expense / daysInMonth)),
         ),
         const SizedBox(height: 12),
         TrendBarCard(
-          title: '每日支出趋势',
+          title: l10n.dailyTrendTitle,
           points: _trend,
-          unitLabel: '日',
+          byDay: true,
           showIncome: false,
         ),
         const SizedBox(height: 8),
         const LegendRow(showIncome: false),
         const SizedBox(height: 12),
-        CategoryPieCard(title: '本月支出构成', slices: summary.expenseByCategory),
+        CategoryPieCard(title: l10n.monthExpensePie, slices: summary.expenseByCategory),
         const SizedBox(height: 12),
         if (summary.incomeByCategory.isNotEmpty) ...[
-          CategoryPieCard(title: '本月收入构成', slices: summary.incomeByCategory),
+          CategoryPieCard(title: l10n.monthIncomePie, slices: summary.incomeByCategory),
           const SizedBox(height: 12),
         ],
         if (busiest != null && busiest.expense > 0)
@@ -363,8 +374,8 @@ class _MonthlyViewState extends State<_MonthlyView> {
             margin: EdgeInsets.zero,
             child: ListTile(
               leading: const Icon(Icons.local_fire_department),
-              title: const Text('花得最多的一天'),
-              subtitle: Text('${month.month}月${busiest.label}日'),
+              title: Text(l10n.busiestDayTitle),
+              subtitle: Text(l10n.monthWithDay(month.month, busiest.label)),
               trailing: Text(
                 formatMoney(busiest.expense),
                 style: const TextStyle(
@@ -428,15 +439,16 @@ class _YearlyViewState extends State<_YearlyView> {
   }
 
   Future<void> _pick(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
     final picked = await showDialog<int>(
       context: context,
       builder: (context) => SimpleDialog(
-        title: const Text('选择年份'),
+        title: Text(l10n.yearPickerTitle),
         children: [
           for (final y in _years)
             SimpleDialogOption(
               onPressed: () => Navigator.pop(context, y),
-              child: Text('$y 年'),
+              child: Text(l10n.yearLabel(y)),
             ),
         ],
       ),
@@ -446,6 +458,7 @@ class _YearlyViewState extends State<_YearlyView> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final year = widget.year;
     final summary = _summary;
     final peak = _trend.fold<TrendPoint?>(
@@ -457,7 +470,7 @@ class _YearlyViewState extends State<_YearlyView> {
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 80),
       children: [
         _RangePickerBar(
-          label: '$year 年',
+          label: l10n.yearLabel(year),
           onPrev: () => widget.onYearChanged(year - 1),
           onNext: () => widget.onYearChanged(year + 1),
           isMaxReached: year >= thisYear,
@@ -466,21 +479,21 @@ class _YearlyViewState extends State<_YearlyView> {
         const SizedBox(height: 8),
         SummaryCards(
           summary: summary,
-          subtitle: '月均支出 ${formatMoney(summary.expense / 12)}',
+          subtitle: l10n.avgPerMonth(formatMoney(summary.expense / 12)),
         ),
         const SizedBox(height: 12),
         TrendBarCard(
-          title: '每月收支趋势',
+          title: l10n.monthlyTrendTitle,
           points: _trend,
-          unitLabel: '月',
+          byDay: false,
         ),
         const SizedBox(height: 8),
         const LegendRow(),
         const SizedBox(height: 12),
-        CategoryPieCard(title: '全年支出构成', slices: summary.expenseByCategory),
+        CategoryPieCard(title: l10n.yearExpensePie, slices: summary.expenseByCategory),
         const SizedBox(height: 12),
         if (summary.incomeByCategory.isNotEmpty) ...[
-          CategoryPieCard(title: '全年收入构成', slices: summary.incomeByCategory),
+          CategoryPieCard(title: l10n.yearIncomePie, slices: summary.incomeByCategory),
           const SizedBox(height: 12),
         ],
         Card(
@@ -491,21 +504,21 @@ class _YearlyViewState extends State<_YearlyView> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
                 child: Text(
-                  '月度对比',
+                  l10n.monthComparison,
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),
               for (final p in _trend)
                 if (p.expense > 0)
                   _MonthBar(
-                    label: '${p.label}月',
+                    label: _monthBarLabel(l10n, p.label),
                     amount: p.expense,
                     maxAmount: peak?.expense ?? 1,
                   ),
               if (_trend.every((p) => p.expense == 0))
-                const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: Text('这一年还没有支出记录'),
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text(l10n.yearNoExpense),
                 ),
             ],
           ),
@@ -566,6 +579,7 @@ class _TxnRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final cat = txn.category;
     final isExpense = txn.type == TxnType.expense;
     return ListTile(
@@ -576,7 +590,10 @@ class _TxnRow extends StatelessWidget {
         backgroundColor: cat.color.withValues(alpha: 0.18),
         child: Icon(cat.icon, size: 18, color: cat.color),
       ),
-      title: Text(cat.label + (txn.note.isEmpty ? '' : ' · ${txn.note}')),
+      title: Text(
+        l10n.categoryLabel(txn.categoryKey) +
+            (txn.note.isEmpty ? '' : ' · ${txn.note}'),
+      ),
       subtitle: Text(
         DateTime.fromMillisecondsSinceEpoch(txn.createdAt).toString().substring(11, 16),
       ),

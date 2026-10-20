@@ -24,12 +24,6 @@ class ThemeModeController extends ChangeNotifier {
 
   ThemeMode get mode => _mode;
 
-  String get label => switch (_mode) {
-    ThemeMode.system => '跟随系统',
-    ThemeMode.light => '浅色',
-    ThemeMode.dark => '深色',
-  };
-
   Future<void> setMode(ThemeMode mode) async {
     if (_mode == mode) return;
     _mode = mode;
