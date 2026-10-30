@@ -11,5 +11,5 @@ public record AppProperties(Jwt jwt, Cors cors, Storage storage) {
 
   public record Cors(List<String> allowedOriginPatterns) {}
 
-  public record Storage(String avatarDir) {}
+  public record Storage(String avatarDir, String feedbackDir) {}
 }

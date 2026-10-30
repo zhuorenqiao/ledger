@@ -1,0 +1,78 @@
+# 记账本 Web 内网预览站点。
+# 两件事：静态托管 Flutter 的 build/web 产物，并把 /api 反代到宿主机上的 Spring Boot。
+# 浏览器因此是同源访问 —— 既不用管 CORS，也不会像直连 dev server 那样
+# 把 dart-define 里的 localhost 当成队友自己的机器。
+#
+# ${BACKEND_ORIGIN} / ${PREVIEW_SERVER_NAME} 由 nginx 官方镜像的 docker-entrypoint
+# 在容器启动时做 envsubst 替换（nginx 自己不会展开环境变量），值来自 compose 文件。
+
+server {
+    listen 80;
+    server_name ${PREVIEW_SERVER_NAME};
+
+    root /srv/web;
+    index index.html;
+
+    # 产物里 index.html / manifest.json 带非 ASCII 字节（中文标题、PWA 名称）。
+    # nginx 默认不吐 charset，桌面 Chrome 会认 <meta charset>，但不少安卓 WebView /
+    # 微信内置浏览器优先信 HTTP 头，头里没有就按 Latin-1 嗅探 —— 中文就变成
+    # 「è®°è´¦æ¬」这种带重音的串码。显式声明掉。
+    charset utf-8;
+    charset_types text/html text/css text/plain application/javascript
+                  application/json application/manifest+json image/svg+xml;
+
+    # 头像 2MB、反馈整包 10MB，这里留一点余量，和后端 spring.multipart 对齐，
+    # 否则容器先拦一道，返回的是 nginx 的 413 而不是后端的业务错误码。
+    client_max_body_size 12m;
+
+    gzip on;
+    gzip_min_length 1024;
+    gzip_comp_level 5;
+    # font/ttf 是自带的中文字体（十几 MB，不压一遍首屏会很难看）；woff2 自己已压过，不列。
+    gzip_types text/plain text/css application/javascript application/json application/wasm
+               image/svg+xml font/ttf font/otf;
+
+    # nginx:alpine 默认把 .ttf/.otf 归到 application/octet-stream，上面的 font/ttf 命不中，
+    # 中文白字体就裸传 17MB。只能在「匹配到字体文件」的 location 里改 types：
+    # types 指令在 server/location 上下文是整体替换继承的 mime 表，写在 server 层会连带
+    # 把 .js / .wasm / .json 全部打成 octet-stream（实测踩过），所以用带扩展名过滤的 location
+    # 把影响面限制在字体本身。
+    location ~* \.(ttf|otf|ttc)$ {
+        types {
+            font/ttf ttf;
+            font/otf otf;
+            font/collection ttc;
+        }
+        default_type application/octet-stream;
+        # 字体文件名没有内容哈希，缓太久换字体时不会被拉到；预览用统一给 1 小时。
+        expires 1h;
+    }
+
+    # 入口文件必须每次回源，否则重新 build 之后队友拿到的还是旧版本。
+    location = /index.html {
+        add_header Cache-Control "no-store";
+    }
+    location = /flutter_bootstrap.js {
+        add_header Cache-Control "no-store";
+    }
+
+    location /api/ {
+        # 不带 URI 部分，原始路径整条透传：/api/auth/login -> 后端 /api/auth/login
+        proxy_pass ${BACKEND_ORIGIN};
+        proxy_http_version 1.1;
+        # 必须用 $http_host 而不是 $host：$host 不带端口，后端重建出来的自身地址会变成
+        # http://10.55.253.214（隐式 80），而浏览器 POST 一定带 Origin: http://10.55.253.214:8889，
+        # 两者不等 → Spring 按跨域处理，来源不在白名单就直接 403（页面登录失败的真实原因）。
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # 批量载入示例数据（单次 5000 条）会慢一些，别被默认 60s 掐断
+        proxy_read_timeout 120s;
+    }
+
+    location / {
+        # 单页应用：未知路径回落到 index.html，方便以后做深层链接
+        try_files $uri $uri/ /index.html;
+    }
+}
