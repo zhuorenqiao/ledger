@@ -1,0 +1,20 @@
+# 运行期状态：dev.ps1 记录的进程 PID 与启动时间
+.dev/
+
+# 合仓过程的临时备份目录
+.git-backup/
+
+# 构建产物
+target/
+build/
+.dart_tool/
+.flutter-plugins-dependencies
+.widget_preview/
+
+# 本地数据与日志（头像、反馈图片、运行日志）
+data/
+*.log
+
+# IDE
+.idea/
+*.iml
