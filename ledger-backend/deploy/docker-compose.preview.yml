@@ -1,0 +1,38 @@
+# 记账本内网预览：只负责把 Flutter Web 产物 + 后端 API 拼成一个同源站点。
+# MySQL 与 Spring Boot 不在这里 —— 预览沿用宿主机已有的进程（../dev.cmd 起的那套）。
+# 前提仍是两个仓库并排放：客户端在 ../ledger-front（本仓库的同级目录）。
+#
+#   # 1. 出静态产物。--no-web-resources-cdn 必须带：默认产物是从
+#   #    https://www.gstatic.com/flutter-canvaskit/ 拉 CanvasKit 的，内网/被 TLS 拦截的
+#   #    网络打不开就是白屏。Web 端默认连「页面自身的 origin」，所以不必传 API_BASE_URL。
+#   cd ../ledger-front && flutter build web --release --no-web-resources-cdn && cd -
+#   # 2. 起预览站点（在本仓库根目录执行）
+#   docker compose -f deploy/docker-compose.preview.yml up -d
+#   # 3. 第一次在本机给人访问，要让防火墙放行这个端口（管理员 PowerShell）
+#   netsh advfirewall firewall add rule name="ledger preview 8889" dir=in action=allow protocol=TCP localport=8889
+#
+# 队友访问 http://<本机内网IP>:8889 即可；停止用 down。
+#   docker compose -f deploy/docker-compose.preview.yml down
+#
+# 端口/后端地址要临时改：
+#   PREVIEW_PORT=8899 BACKEND_PORT=9091 docker compose -f deploy/docker-compose.preview.yml up -d
+
+services:
+  preview:
+    image: nginx:alpine
+    container_name: ledger-preview-web
+    restart: unless-stopped
+    ports:
+      - "${PREVIEW_PORT:-8889}:80"
+    environment:
+      PREVIEW_SERVER_NAME: "_"
+      # 容器访问宿主机：Docker Desktop 自带 host.docker.internal，
+      # Linux 主机上靠下面的 extra_hosts 拿到同样的名字。
+      BACKEND_ORIGIN: "http://${BACKEND_HOST:-host.docker.internal}:${BACKEND_PORT:-9090}"
+      # 只对这两个变量做替换，防止 nginx 的 $host / $uri 这类内置变量被 envsubst 吃掉。
+      NGINX_ENVSUBST_FILTER: "^(BACKEND_ORIGIN|PREVIEW_SERVER_NAME)$"
+    volumes:
+      - ../../ledger-front/build/web:/srv/web:ro
+      - ./nginx/ledger-preview.conf.template:/etc/nginx/templates/default.conf.template:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
