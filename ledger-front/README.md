@@ -87,8 +87,8 @@ flutter test                                            # 单元 + golden，全�
 RUN_BACKEND_TESTS=1 flutter test test/backend_integration_test.dart   # 真实打到后端的联调用例
 ```
 
-> 当前有 8 个 golden 测试失配：内置字体那次改动改了全局 `fontFamily`，但 `test/goldens/` 的基准图
-> 没有跟着重新生成。需要时执行 `flutter test --update-goldens` 重新生成。
+> **golden 基准图看不到字形。** `flutter test` 用的是测试字体，每个字形都画成实心方块，
+> 基准图只能校验布局与配色，catch 不了"中文变豆腐块"这类字体回归。
+> 真要守住字体，得在测试里用 `FontLoader` 把打包的 NotoSansSC 加载进测试环境再重新生成基准图。
 >
-> 另外 `test/failures/` 是测试失败时的 diff 图，历史上被误提交进了仓库，跑一次测试就会弄脏工作区，
-> 建议加进 `.gitignore` 并 `git rm -r --cached` 掉。
+> `test/failures/` 是测试失败时生成的 diff 图，属于本地临时产物，已加进 `.gitignore` 且不再入库。

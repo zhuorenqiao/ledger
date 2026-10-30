@@ -46,3 +46,6 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Golden 测试失败时生成的 diff 图，是本地临时产物，不该进仓库
+/test/failures/

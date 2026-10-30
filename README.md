@@ -117,11 +117,9 @@ cd ../ledger-backend
 
 ## 已知问题
 
-- **前端 8 个 golden 测试当前失配。** 内置中文字体那次改动把全局 `fontFamily` 换成了自带的
-  NotoSansSC，但 `ledger-front/test/goldens/` 的基准图没有跟着重新生成，比对时报
-  `Pixel test failed`。需要时在 `ledger-front` 下执行 `flutter test --update-goldens` 重新生成。
-- **`ledger-front/test/failures/` 历史上被误提交进仓库。** 那是测试失败时的 diff 图，
-  任何人跑一次测试都会把工作区弄脏。建议加进 `.gitignore` 并 `git rm -r --cached` 掉。
 - **`ledger-front/assets/fonts/NotoSansSC-Variable.ttf` 有 17MB。** 它是 Web 端不依赖公网字体的关键，
   但每次字体更新都是一个新的大 blob；这块若还要反复调整，值得上 Git LFS。
 - **`JWT_SECRET` 仓库里带的是开发默认值**，上线前必须用环境变量覆盖（HS512，至少 32 字节）。
+- **golden 基准图看不到字形。** `flutter test` 用的是测试字体，每个字形都画成实心方块，
+  所以基准图只能校验布局与配色，**catch 不了"中文变豆腐块"这类字体回归**。
+  真要守住字体，得在测试里用 `FontLoader` 把打包的 NotoSansSC 加载进测试环境再重新生成基准图。
