@@ -2,6 +2,8 @@
 
 Flutter 客户端（同级目录 `../ledger-front`）的数据源。账单落 MySQL，统计口径由 SQL 聚合完成，客户端只做渲染。
 
+> 本文只讲服务端。仓库整体结构、一键启动、架构图见上级目录的 [`../README.md`](../README.md)。
+
 - Java 17 / Spring Boot 3.5 / Spring Security（JWT）/ Spring Data JPA
 - MySQL 8.4，用 Docker Compose 启动
 
@@ -36,6 +38,9 @@ flutter run -d android --dart-define=API_BASE_URL=http://10.0.2.2:9090   # 模�
 | `DB_USER` / `DB_PASSWORD` | `ledger` / `ledger-dev` | 与 docker-compose.yml 对应 |
 | `JWT_SECRET` | 开发用默认值 | **生产必须覆盖**，HS512 密钥，至少 32 字节 |
 | `SERVER_PORT` | `9090` | HTTP 端口 |
+| `AVATAR_DIR` | `data/avatars` | 头像落盘目录，相对后端启动目录；容器化时挂持久卷 |
+| `FEEDBACK_DIR` | `data/feedback` | 反馈图片落盘目录 |
+| `CORS_ALLOWED_ORIGIN_PATTERNS` | `http://localhost:[*],http://127.0.0.1:[*]` | 逗号分隔的允许来源；走 nginx 同源反代的预览站不触发 CORS |
 
 ## 统一响应体
 
@@ -94,6 +99,7 @@ token 有效期 7 天；过期后接口返回 401，客户端会自动清会话�
 | GET | `/api/stats/daily?year=&month=` | 整月每日趋势，无记录的日期补 0 |
 | GET | `/api/stats/monthly?year=` | 全年 12 个月趋势 |
 | GET | `/api/stats/years` | 有账单的年份，倒序 |
+| POST | `/api/feedback` | 意见反馈，`multipart/form-data`：`content`（正文，≤1000 字）+ `images`（最多 3 张图，可选，同名多份） |
 
 账单字段：`type`（`expense`/`income`）、`category`（分类 key）、`amount`、`day`（`yyyy-MM-dd`）、
 `note`、`createdAt`（epoch millis）。分类 key 由后端 `CategoryCatalog` 校验，图标和文案仍在客户端
@@ -103,6 +109,14 @@ token 有效期 7 天；过期后接口返回 401，客户端会自动清会话�
 
 `db/schema.sql`，由 MySQL 容器首次初始化时执行；应用侧是 `spring.jpa.hibernate.ddl-auto=validate`，
 只校验不建表。`users` 与 `txn` 一对多，删账号时账单级联删除。
+
+三张表：
+
+| 表 | 内容 | 关键约束 |
+| --- | --- | --- |
+| `users` | 账号、昵称、邮箱、手机号、头像文件名 | `uk_users_username` 唯一索引 |
+| `txn` | 账单：类型、分类 key、金额、日期、备注 | `idx_txn_user_day(user_id, day, created_at)`；外键级联 |
+| `feedback` | 反馈正文与图片文件名列表 | `idx_feedback_user_created(user_id, created_at)`；外键级联 |
 
 initdb 脚本只在数据卷为空时跑一次，所以改过 `schema.sql` 后，已有的库要手动补列，否则启动时 validate 会失败：
 
@@ -122,6 +136,42 @@ docker exec ledger-mysql mysql -uroot -pledger-root ledger -e "
 路径穿越；换图时删掉旧文件。地址固定为 `/api/auth/me/avatar` 且响应 `no-store`；客户端会额外带一个
 `?v=` 查询参数用于绕开自己进程内的图片缓存，服务端忽略它。
 
+## 反馈与素材上传
+
+头像和反馈图片共用同一套做法：**图片落盘，数据库只记文件名**。
+
+- 扩展名由服务端按 `Content-Type` 反推，客户端传的文件名一律不用，因此不存在路径穿越
+- 头像：`data/avatars/{userId}.{ext}`，换图时删掉旧文件
+- 反馈图片：`data/feedback/{userId}-{uuid}.{ext}`
+- 限额：单文件 ≤2MB、整包 ≤10MB（`spring.servlet.multipart`），超出直接 413
+- 反馈正文 ≤1000 字（按码点计，与 `VARCHAR(1000)` 的字符计数一致）、图片 ≤3 张
+
+反馈接口是 `multipart/form-data`：`content` 是正文文本域，`images` 是可选的同名多份文件。
+客户端 `lib/data/feedback_repository.dart` 的上限与服务端常量对齐，前端先拦一次，省掉必然失败的请求。
+
+`FeedbackService` 会先把所有扩展名校验完再落盘，避免中途失败留下一堆没用的文件；写盘成功后再落库。
+事务回滚不会顺手删掉已落盘的图片，最坏留一张孤儿图 —— 这是刻意的取舍：宁可留孤儿图，
+也不要留下指向空文件的记录。
+
+## 内网预览站
+
+`deploy/docker-compose.preview.yml` 起一个 nginx 容器，把 Flutter Web 产物和后端 API 拼成**同一个站点**：
+
+```bash
+cd ../ledger-front && flutter build web --release --no-web-resources-cdn && cd -
+docker compose -f deploy/docker-compose.preview.yml up -d
+```
+
+访问 `http://<本机内网IP>:8889`。浏览器与 API 同源，不会触发 CORS 预检；`/api` 由 nginx 反代到
+宿主机的 `host.docker.internal:9090`。停掉用 `docker compose -f deploy/docker-compose.preview.yml down`。
+
+两个容易踩的点：
+
+- Web 产物**必须**带 `--no-web-resources-cdn`。默认产物是从 `https://www.gstatic.com/flutter-canvaskit/`
+  拉 CanvasKit 的，内网或被 TLS 拦截的网络上拉不到就是白屏。
+- nginx 把 `proxy_read_timeout` 提到 120s，因为批量灌示例数据（单次 5000 条）会比较慢，
+  默认 60s 会把它掐断。
+
 ## 快速自测
 
 ```bash
@@ -132,6 +182,12 @@ curl -X POST http://localhost:9090/api/auth/register \
 # 带上 token 后
 curl "http://localhost:9090/api/stats/summary?from=2026-09-01&to=2026-09-30" \
   -H "Authorization: Bearer $TOKEN"
+
+# 提一条反馈（content 是文本域，images 可选，最多 3 张）
+curl -X POST http://localhost:9090/api/feedback \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "content=字体在离线环境也能正常显示了" \
+  -F "images=@shot1.png" -F "images=@shot2.png"
 ```
 
 客户端契约的真实联调（需后端在跑）：
