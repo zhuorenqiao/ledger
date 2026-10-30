@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>记账本 Ledger · 系统架构与关键链路</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f7f5f0;
+  --card:#ffffff;
+  --line:#e9e3d6;
+  --line-soft:#f1ece1;
+  --ink:#14171e;
+  --ink2:#3a4256;
+  --muted:#7c7a72;
+  --primary:#2f6f5e;
+  --w1:rgba(47,111,94,.06);
+  --w2:rgba(47,111,94,.12);
+  --w3:rgba(47,111,94,.20);
+  --sans:'Outfit','PingFang SC','Hiragino Sans GB','Microsoft YaHei','Noto Sans SC',sans-serif;
+  --serif:'DM Serif Display','Songti SC','STSong','SimSun',serif;
+  --mono:'JetBrains Mono','Consolas','Courier New',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:14.5px;
+  line-height:1.6;
+  padding:0 0 80px;
+  background-image:
+    radial-gradient(900px 420px at 12% -6%, rgba(47,111,94,.055), transparent 70%),
+    radial-gradient(760px 380px at 92% 4%, rgba(201,123,63,.05), transparent 70%);
+}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+
+/* ---------- header ---------- */
+header{padding:64px 0 34px;border-bottom:1px solid var(--line);margin-bottom:44px}
+.eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--primary);margin-bottom:14px}
+h1{font-family:var(--serif);font-size:40px;line-height:1.18;font-weight:400;letter-spacing:-.005em;margin-bottom:14px}
+h1 em{font-style:normal;color:var(--primary)}
+.lead{font-size:16px;color:var(--ink2);max-width:64ch;margin-bottom:22px}
+.meta{display:flex;flex-wrap:wrap;gap:8px}
+.meta span{font-family:var(--mono);font-size:11.5px;color:var(--ink2);background:var(--card);border:1px solid var(--line);border-radius:999px;padding:4px 11px}
+.meta span b{color:var(--primary);font-weight:600}
+
+/* ---------- sections ---------- */
+section{margin-bottom:52px}
+.sec-head{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+.sec-no{font-family:var(--mono);font-size:12px;color:var(--primary);border:1px solid var(--line);background:var(--card);border-radius:6px;padding:2px 8px}
+h2{font-family:var(--serif);font-size:26px;font-weight:400;letter-spacing:-.003em}
+.sec-sub{color:var(--muted);font-size:14px;margin:0 0 22px 46px;max-width:70ch}
+h3{font-size:16px;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+h3 svg{color:var(--primary);flex:none}
+p{color:var(--ink2)}
+.note{font-size:13px;color:var(--muted);margin-top:10px}
+code{font-family:var(--mono);font-size:12.5px;background:var(--w1);border:1px solid var(--line);border-radius:5px;padding:1px 5px;color:var(--ink)}
+
+/* ---------- band (architecture layers) ---------- */
+.stack{display:flex;flex-direction:column}
+.band{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:15px 18px 16px;box-shadow:0 2px 8px rgba(0,0,0,.035)}
+.band-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.band-tag{font-family:var(--mono);font-size:11px;color:#fff;background:var(--primary);border-radius:5px;padding:2px 7px;letter-spacing:.06em}
+.band-name{font-family:var(--serif);font-size:19px}
+.band-tech{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-left:auto}
+.layerrow{display:grid;grid-template-columns:132px 1fr;gap:14px;padding:9px 0;border-top:1px dashed var(--line)}
+.layerrow:first-of-type{border-top:none;padding-top:2px}
+.layer-tag{font-size:12.5px;font-weight:600;color:var(--ink);padding-top:3px}
+.layer-tag small{display:block;font-weight:400;color:var(--muted);font-size:11.5px;font-family:var(--mono)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:3px 8px;font-size:12.5px;color:var(--ink2);white-space:nowrap}
+.chip b{color:var(--ink);font-weight:600}
+.chip.mono{font-family:var(--mono);font-size:11.5px;white-space:normal}
+.conn{display:flex;align-items:center;justify-content:center;gap:11px;padding:7px 0;color:var(--muted);font-size:12.5px}
+.conn .bar{width:1px;height:20px;background:var(--line)}
+.conn .arrow{color:var(--primary)}
+.conn b{color:var(--ink2);font-weight:500}
+
+/* ---------- module grid ---------- */
+.mod-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.mod{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.035)}
+.mod-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.mod-ico{width:30px;height:30px;border-radius:9px;background:var(--w1);border:1px solid var(--line);display:grid;place-items:center;color:var(--primary);flex:none}
+.mod-role{font-size:13px;color:var(--ink2);margin-bottom:13px}
+.mod-block{margin-top:11px}
+.mod-block dt{font-size:11.5px;font-family:var(--mono);color:var(--muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:6px}
+.mod-block dd{display:flex;flex-wrap:wrap;gap:6px}
+
+/* ---------- dependency map ---------- */
+.dep{display:grid;grid-template-columns:1fr 1.32fr 1fr;gap:12px;align-items:stretch}
+.dep-col{display:flex;flex-direction:column;gap:12px}
+.dep-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px 14px;display:flex;gap:11px;align-items:flex-start;box-shadow:0 2px 8px rgba(0,0,0,.03)}
+.dep-card svg{color:var(--primary);flex:none;margin-top:2px}
+.dep-card .t{font-weight:600;font-size:13.5px}
+.dep-card .d{font-size:12px;color:var(--muted);line-height:1.5}
+.dep-core{background:var(--primary);border-color:var(--primary);color:#fff;justify-content:center;align-items:center;text-align:center;flex-direction:column;gap:4px;padding:18px}
+.dep-core .t{font-family:var(--serif);font-size:20px;color:#fff}
+.dep-core .d{color:rgba(255,255,255,.78);font-size:12px}
+
+/* ---------- flow (swimlane) ---------- */
+.flow{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 18px 14px;box-shadow:0 2px 8px rgba(0,0,0,.035)}
+.flow-head{display:grid;grid-template-columns:34px repeat(3,1fr);gap:10px;padding-bottom:9px;border-bottom:1px solid var(--line);margin-bottom:4px}
+.flow-head div{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.flow-head .h-client{color:var(--primary)}
+.flow-head .h-server{color:var(--primary)}
+.flow-head .h-store{color:var(--primary)}
+.flow-rows{list-style:none;position:relative}
+.flow-rows li{display:grid;grid-template-columns:34px repeat(3,1fr);gap:10px;padding:6px 0;align-items:stretch;position:relative}
+.flow-rows .num{
+  position:relative;z-index:2;
+  width:22px;height:22px;margin:6px 0 0 6px;
+  border-radius:50%;border:1.5px solid var(--primary);background:var(--card);
+  color:var(--primary);display:grid;place-items:center;
+  font-family:var(--mono);font-size:11px;font-weight:600;line-height:1;
+}
+.flow-rows li::before{content:"";position:absolute;left:17px;top:0;bottom:0;width:1px;background:var(--line)}
+.flow-rows li:first-child::before{top:17px}
+.flow-rows li:last-child::before{bottom:calc(100% - 17px)}
+.cell{display:flex}
+.step{width:100%;border:1px solid var(--line);border-left:3px solid var(--primary);border-radius:10px;padding:8px 11px;font-size:12.8px;line-height:1.55;color:var(--ink2);background:var(--card)}
+.step .tier{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--primary);display:block;margin-bottom:2px}
+.step b{color:var(--ink);font-weight:600}
+.step .em{font-family:var(--mono);font-size:11.5px;color:var(--ink)}
+.cell.t1 .step{background:var(--w1)}
+.cell.t2 .step{background:var(--w2)}
+.cell.t3 .step{background:var(--w3)}
+
+/* ---------- tables ---------- */
+.tbl{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;font-size:13px}
+.tbl th{text-align:left;font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500;padding:11px 14px;border-bottom:1px solid var(--line);background:var(--bg)}
+.tbl td{padding:10px 14px;border-bottom:1px solid var(--line-soft);color:var(--ink2);vertical-align:top}
+.tbl tr:last-child td{border-bottom:none}
+.tbl td:first-child{font-weight:600;color:var(--ink);white-space:nowrap}
+.tbl .ep{display:flex;flex-wrap:wrap;gap:5px}
+.tbl .ep code{background:var(--w1);border-color:var(--line);font-size:11.5px}
+
+/* ---------- takeaways ---------- */
+.take{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.take-item{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:15px 16px;display:flex;gap:11px;box-shadow:0 2px 8px rgba(0,0,0,.03)}
+.take-item svg{color:var(--primary);flex:none;margin-top:3px}
+.take-item .t{font-weight:600;font-size:13.5px;margin-bottom:3px}
+.take-item .d{font-size:12.6px;color:var(--ink2);line-height:1.55}
+.take-item .d em{font-style:normal;font-family:var(--mono);font-size:11.5px;color:var(--ink);background:var(--w1);border-radius:4px;padding:0 4px}
+
+footer{border-top:1px solid var(--line);padding-top:20px;color:var(--muted);font-size:12.5px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+
+@media (max-width:860px){
+  .mod-grid,.take{grid-template-columns:1fr}
+  .dep{grid-template-columns:1fr}
+  .dep-core{order:-1}
+  .layerrow{grid-template-columns:1fr;gap:5px}
+  .band-tech{margin-left:0}
+  .flow-head{grid-template-columns:1fr}
+  .flow-head div:not(:first-child){display:none}
+  .flow-rows li{grid-template-columns:30px 1fr}
+  .flow-rows li::before{display:none}
+  .cell{grid-column:2}
+  .cell:empty{display:none}
+  h1{font-size:30px}
+  .wrap{padding:0 16px}
+  header{padding:40px 0 26px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">ledger · architecture &amp; data flow</div>
+  <h1>记账本 Ledger：<em>整体分层、模块边界与关键链路</em></h1>
+  <p class="lead">
+    一套 Flutter 多端客户端 + Spring Boot 服务端 + MySQL 的记账应用。核心设计是
+    <b>统计口径全部下沉到 SQL 聚合，客户端只做渲染</b>；所有接口共用统一响应体与 JWT 鉴权。
+    本文按实际仓库代码绘制，覆盖四条主链路的数据流向。
+  </p>
+  <div class="meta">
+    <span>客户端 <b>Flutter</b> · Dart 3.13</span>
+    <span>服务端 <b>Spring Boot 3.5.16</b> · Java 17</span>
+    <span>存储 <b>MySQL 8.4</b></span>
+    <span>接口 <b>16</b> 个</span>
+    <span>数据表 <b>3</b> 张</span>
+    <span>仓库实现 <b>2</b> 套</span>
+    <span>HTTP 端口 <b>9090</b></span>
+  </div>
+</header>
+
+<!-- ============ 1. 分层 ============ -->
+<section>
+  <div class="sec-head"><span class="sec-no">01</span><h2>整体分层</h2></div>
+  <p class="sec-sub">自上而下共四个分层带、十个子层。带与带之间是单向调用，上层不感知下层实现——唯一的跨界契约是 HTTP + JSON。</p>
+
+  <div class="stack">
+
+    <div class="band">
+      <div class="band-head">
+        <span class="band-tag">A</span>
+        <span class="band-name">客户端 · Flutter</span>
+        <span class="band-tech">ledger-front / lib</span>
+      </div>
+      <div class="layerrow">
+        <div class="layer-tag">展示层<small>pages / widgets</small></div>
+        <div class="chips">
+          <span class="chip">login_page</span><span class="chip">home_page</span><span class="chip">records_page</span>
+          <span class="chip">analytics_page</span><span class="chip">add_txn_page</span><span class="chip">profile_page</span>
+          <span class="chip">feedback_page</span><span class="chip">widgets/charts</span><span class="chip">l10n 本地化</span>
+        </div>
+      </div>
+      <div class="layerrow">
+        <div class="layer-tag">状态层<small>ChangeNotifier</small></div>
+        <div class="chips">
+          <span class="chip"><b>LedgerStore</b> 账本内存态</span>
+          <span class="chip"><b>AuthSession</b> JWT / 服务器地址</span>
+          <span class="chip">ThemeModeController</span>
+          <span class="chip">LocaleController</span>
+        </div>
+      </div>
+      <div class="layerrow">
+        <div class="layer-tag">数据访问层<small>data</small></div>
+        <div class="chips">
+          <span class="chip"><b>ApiClient</b> dio + Bearer 拦截器</span>
+          <span class="chip"><b>LedgerRepository</b> 抽象接口</span>
+          <span class="chip">RemoteLedgerRepository</span>
+          <span class="chip">SqfliteRepository</span>
+          <span class="chip">SharedPreferencesRepository</span>
+          <span class="chip">FeedbackRepository</span>
+          <span class="chip">demo_data</span>
+        </div>
+      </div>
+      <div class="layerrow">
+        <div class="layer-tag">本地存储<small>离线备用</small></div>
+        <div class="chips">
+          <span class="chip mono">SharedPreferences：token / baseUrl / 主题 / 语言</span>
+          <span class="chip mono">SQLite：ledger.db（仅离线仓库与单测）</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="conn"><span class="bar"></span><svg class="arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg><span class="bar"></span><span><b>REST / JSON</b> · <code>Authorization: Bearer &lt;JWT&gt;</code> · CORS（同源反代时不触发）</span></div>
+
+    <div class="band">
+      <div class="band-head">
+        <span class="band-tag">B</span>
+        <span class="band-name">服务端 · Spring Boot</span>
+        <span class="band-tech">ledger-backend / com.example.ledger</span>
+      </div>
+      <div class="layerrow">
+        <div class="layer-tag">Web 层<small>web</small></div>
+        <div class="chips">
+          <span class="chip">AuthController</span><span class="chip">TxnController</span><span class="chip">StatsController</span>
+          <span class="chip">FeedbackController</span><span class="chip">ApiResponseBodyAdvice</span>
+          <span class="chip">ApiExceptionHandler</span><span class="chip">ErrorCode</span><span class="chip">RequestValidation</span>
+        </div>
+      </div>
+      <div class="layerrow">
+        <div class="layer-tag">安全层<small>security / config</small></div>
+        <div class="chips">
+          <span class="chip">SecurityConfig</span><span class="chip">JwtAuthFilter</span><span class="chip">JwtService</span>
+          <span class="chip">AuthUser principal</span><span class="chip">BCrypt</span><span class="chip">CORS 策略</span>
+        </div>
+      </div>
+      <div class="layerrow">
+        <div class="layer-tag">业务层<small>service</small></div>
+        <div class="chips">
+          <span class="chip">AuthService</span><span class="chip">TxnService</span><span class="chip">StatsService</span>
+          <span class="chip">AvatarService</span><span class="chip">FeedbackService</span><span class="chip">CategoryCatalog</span>
+        </div>
+      </div>
+      <div class="layerrow">
+        <div class="layer-tag">数据层<small>repository / domain</small></div>
+        <div class="chips">
+          <span class="chip">UserRepository</span><span class="chip">TxnRepository</span><span class="chip">FeedbackRepository</span>
+          <span class="chip">User · Txn · Feedback</span><span class="chip">@Query 聚合</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="conn"><span class="bar"></span><svg class="arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg><span class="bar"></span><span><b>JDBC / MyBatis-less</b> · HikariCP 连接池 10 · <code>ddl-auto=validate</code> 只校验不建表</span></div>
+
+    <div class="band">
+      <div class="band-head">
+        <span class="band-tag">C</span>
+        <span class="band-name">存储与基础设施</span>
+        <span class="band-tech">docker compose + 本地磁盘</span>
+      </div>
+      <div class="layerrow">
+        <div class="layer-tag">关系库<small>MySQL 8.4</small></div>
+        <div class="chips">
+          <span class="chip mono">users 账号 / 资料 / 头像文件名</span>
+          <span class="chip mono">txn 账单（idx_txn_user_day）</span>
+          <span class="chip mono">feedback 反馈正文 / 图片文件名</span>
+          <span class="chip mono">外键级联：删账号 → 连带删账单</span>
+        </div>
+      </div>
+      <div class="layerrow">
+        <div class="layer-tag">文件系统<small>app.storage</small></div>
+        <div class="chips">
+          <span class="chip mono">data/avatars/{userId}.{ext}</span>
+          <span class="chip mono">data/feedback/{userId}-{uuid}.{ext}</span>
+          <span class="chip">库里只存文件名</span>
+        </div>
+      </div>
+      <div class="layerrow">
+        <div class="layer-tag">运行时<small>deploy</small></div>
+        <div class="chips">
+          <span class="chip">nginx:alpine 预览站（静态 + /api 反代）</span>
+          <span class="chip">Flutter Web / Android / iOS / 桌面</span>
+          <span class="chip mono">DEV_PORT=9090</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============ 2. 模块 ============ -->
+<section>
+  <div class="sec-head"><span class="sec-no">02</span><h2>核心模块</h2></div>
+  <p class="sec-sub">按业务能力切成四块。每块都是"前端页面 + 后端服务 + 一张表"的完整闭环，不存在只有一端的半成品模块。</p>
+
+  <div class="mod-grid">
+
+    <div class="mod">
+      <div class="mod-head">
+        <span class="mod-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+        <h3>账户与安全</h3>
+      </div>
+      <p class="mod-role">注册、登录、资料维护与头像；全站唯一的身份来源，其他模块靠它给出的 userId 隔离数据。</p>
+      <dl class="mod-block"><dt>前端</dt><dd><span class="chip">login_page</span><span class="chip">profile_page</span><span class="chip">auth_session</span></dd></dl>
+      <dl class="mod-block"><dt>后端</dt><dd><span class="chip">AuthService</span><span class="chip">AvatarService</span><span class="chip">JwtService</span><span class="chip">JwtAuthFilter</span></dd></dl>
+      <dl class="mod-block"><dt>接口</dt><dd><span class="chip mono">/api/auth/*</span><span class="chip mono">users 表</span></dd></dl>
+    </div>
+
+    <div class="mod">
+      <div class="mod-head">
+        <span class="mod-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M16 2v4a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V2"/><path d="M8 12h8M8 16h5"/></svg></span>
+        <h3>账本记账</h3>
+      </div>
+      <p class="mod-role">账单的增删查、游标分页与示例数据灌入；分类合法性由服务端白名单把关。</p>
+      <dl class="mod-block"><dt>前端</dt><dd><span class="chip">add_txn_page</span><span class="chip">records_page</span><span class="chip">LedgerStore</span><span class="chip">demo_data</span></dd></dl>
+      <dl class="mod-block"><dt>后端</dt><dd><span class="chip">TxnService</span><span class="chip">TxnRepository</span><span class="chip">CategoryCatalog</span></dd></dl>
+      <dl class="mod-block"><dt>接口</dt><dd><span class="chip mono">/api/txns</span><span class="chip mono">txn 表</span></dd></dl>
+    </div>
+
+    <div class="mod">
+      <div class="mod-head">
+        <span class="mod-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg></span>
+        <h3>统计报表</h3>
+      </div>
+      <p class="mod-role">日 / 月 / 年趋势与分类占比。口径由 MySQL 的 GROUP BY 决定，客户端不参与任何金额计算。</p>
+      <dl class="mod-block"><dt>前端</dt><dd><span class="chip">analytics_page</span><span class="chip">widgets/charts</span><span class="chip">fl_chart</span><span class="chip">models/stats</span></dd></dl>
+      <dl class="mod-block"><dt>后端</dt><dd><span class="chip">StatsService</span><span class="chip">TxnRepository @Query</span></dd></dl>
+      <dl class="mod-block"><dt>接口</dt><dd><span class="chip mono">/api/stats/*</span></dd></dl>
+    </div>
+
+    <div class="mod">
+      <div class="mod-head">
+        <span class="mod-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+        <h3>反馈与素材</h3>
+      </div>
+      <p class="mod-role">意见反馈（正文 + 最多 3 图）与头像的二进制上传；两者共用同一套"落盘 + 库里只存文件名"的做法。</p>
+      <dl class="mod-block"><dt>前端</dt><dd><span class="chip">feedback_page</span><span class="chip">feedback_repository</span><span class="chip">file_picker</span></dd></dl>
+      <dl class="mod-block"><dt>后端</dt><dd><span class="chip">FeedbackService</span><span class="chip">AvatarService</span><span class="chip">FeedbackController</span></dd></dl>
+      <dl class="mod-block"><dt>接口</dt><dd><span class="chip mono">/api/feedback</span><span class="chip mono">/api/auth/me/avatar</span></dd></dl>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============ 3. 外部依赖 ============ -->
+<section>
+  <div class="sec-head"><span class="sec-no">03</span><h2>外部依赖</h2></div>
+  <p class="sec-sub">中间是应用本身，四周是它依赖的外部世界。系统本身不依赖任何公网服务——除可选的 Google Fonts 字体外，全部可离线运行。</p>
+
+  <div class="dep">
+    <div class="dep-col">
+      <div class="dep-card">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+        <div><div class="t">Docker Desktop</div><div class="d">起 MySQL 容器与 nginx 预览站</div></div>
+      </div>
+      <div class="dep-card">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
+        <div><div class="t">客户端运行时</div><div class="d">浏览器 / Android / iOS / 桌面壳</div></div>
+      </div>
+      <div class="dep-card">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h6"/></svg>
+        <div><div class="t">SharedPreferences</div><div class="d">token、服务器地址、主题与语言</div></div>
+      </div>
+    </div>
+
+    <div class="dep-col">
+      <div class="dep-card">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5"/><path d="M3 12c0 1.7 4 3 9 3s9-1.3 9-3"/></svg>
+        <div><div class="t">MySQL 8.4</div><div class="d">容器 ledger-mysql，端口 3306，数据卷 backend_mysql-data</div></div>
+      </div>
+      <div class="dep-card dep-core">
+        <div class="t">Ledger 应用</div>
+        <div class="d">Flutter 客户端 + Spring Boot 服务端<br>自持业务逻辑与统计口径</div>
+      </div>
+      <div class="dep-card">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+        <div><div class="t">本地磁盘</div><div class="d">data/avatars 与 data/feedback，容器化需挂持久卷</div></div>
+      </div>
+    </div>
+
+    <div class="dep-col">
+      <div class="dep-card">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20Z"/></svg>
+        <div><div class="t">nginx:alpine</div><div class="d">预览站：静态产物 + /api 反代到宿主 9090</div></div>
+      </div>
+      <div class="dep-card">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+        <div><div class="t">SQLite（sqflite）</div><div class="d">移动端离线仓库，仅离线与单测使用</div></div>
+      </div>
+      <div class="dep-card">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="9"/></svg>
+        <div><div class="t">Windows 端口保留段</div><div class="d">8006–8105 被 Hyper-V/WSL2 占用，故用 9090</div></div>
+      </div>
+    </div>
+  </div>
+
+  <table class="tbl" style="margin-top:16px">
+    <thead><tr><th>依赖</th><th>版本 / 位置</th><th>用途</th><th>边界与注意</th></tr></thead>
+    <tbody>
+      <tr><td>MySQL</td><td class="mono" style="font-family:var(--mono);font-size:12px">8.4 · 容器 ledger-mysql · 3306</td><td>账单、账号、反馈的唯一权威存储</td><td>schema.sql 只在数据卷为空时执行一次；改过表结构需手工补列，否则 <code>validate</code> 启动失败</td></tr>
+      <tr><td>本地文件系统</td><td class="mono" style="font-family:var(--mono);font-size:12px">data/avatars · data/feedback</td><td>存放头像与反馈图片</td><td>已在 gitignore；容器化部署需挂到持久卷，否则重建即丢图</td></tr>
+      <tr><td>nginx</td><td class="mono" style="font-family:var(--mono);font-size:12px">alpine · 预览端口 8889</td><td>同源托管 Flutter Web 产物并反代 /api</td><td>同源后浏览器不触发 CORS 预检；proxy_read_timeout 提到 120s 以容纳批量灌数据</td></tr>
+      <tr><td>SharedPreferences</td><td class="mono" style="font-family:var(--mono);font-size:12px">客户端本地键值</td><td>持久化 JWT、服务器地址、主题与语言</td><td>Web 端换服务器地址只需改设置、无需重新 build</td></tr>
+      <tr><td>公网</td><td class="mono" style="font-family:var(--mono);font-size:12px">仅可选 fonts.googleapis.com</td><td>页面字体</td><td>业务链路零公网依赖；Web 产物必须带 <code>--no-web-resources-cdn</code>，否则 CanvasKit 拉不到就是白屏</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ 4. 关键链路 ============ -->
+<section>
+  <div class="sec-head"><span class="sec-no">04</span><h2>关键链路的数据流</h2></div>
+  <p class="sec-sub">每一步都标出发生在哪一层。读法是从上往下：先在客户端发生什么，请求打到服务端后又经过哪些关卡，最后数据落到哪里。</p>
+
+  <h3 style="margin-bottom:10px">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/></svg>
+    链路 A · 登录与鉴权
+  </h3>
+  <div class="flow" style="margin-bottom:16px">
+    <div class="flow-head"><div></div><div class="h-client">Flutter 客户端</div><div class="h-server">Spring Boot 服务端</div><div class="h-store">存储层</div></div>
+    <ol class="flow-rows">
+      <li><span class="num">1</span><div class="cell t1"><div class="step"><span class="tier">客户端</span>登录页填账号密码；服务器地址可现场改，存进 SharedPreferences</div></div><div class="cell"></div><div class="cell"></div></li>
+      <li><span class="num">2</span><div class="cell t1"><div class="step"><span class="tier">客户端</span><code>AuthSession.login</code> → <code>ApiClient</code> POST <span class="em">/api/auth/login</span>，此刻尚无 Bearer</div></div><div class="cell"></div><div class="cell"></div></li>
+      <li><span class="num">3</span><div class="cell"></div><div class="cell t2"><div class="step"><span class="tier">服务端</span>SecurityConfig 放行 login/register；AuthController 校验 LoginRequest</div></div><div class="cell"></div></li>
+      <li><span class="num">4</span><div class="cell"></div><div class="cell t2"><div class="step"><span class="tier">服务端</span>AuthService 用 BCrypt 匹配 password_hash；失败抛 <span class="em">40101</span></div></div><div class="cell t3"><div class="step"><span class="tier">存储</span>users 表按 <span class="em">uk_users_username</span> 命中</div></div></li>
+      <li><span class="num">5</span><div class="cell"></div><div class="cell t2"><div class="step"><span class="tier">服务端</span>JwtService 签发 HS512 token，TTL <span class="em">P7D</span>，issuer <span class="em">ledger-app</span></div></div><div class="cell"></div></li>
+      <li><span class="num">6</span><div class="cell t1"><div class="step"><span class="tier">客户端</span>剥掉统一响应体取 data；token 与 user 落 SharedPreferences，拦截器此后自动加 Bearer</div></div><div class="cell"></div><div class="cell"></div></li>
+      <li><span class="num">7</span><div class="cell"></div><div class="cell t2"><div class="step"><span class="tier">服务端</span>JwtAuthFilter 校验签名与有效期，注入 AuthUser principal</div></div><div class="cell t3"><div class="step"><span class="tier">存储</span>后续查询一律按 <span class="em">user_id</span> 过滤（如 findByIdAndUserId），杜绝越权</div></div></li>
+      <li><span class="num">8</span><div class="cell t1"><div class="step"><span class="tier">客户端</span>收到 401 → onUnauthorized 清 token 与 user → 自动退回登录页</div></div><div class="cell t2"><div class="step"><span class="tier">服务端</span>token 过期返回 <span class="em">{code:40100}</span>，HTTP 状态同为 401</div></div><div class="cell"></div></li>
+    </ol>
+  </div>
+
+  <h3 style="margin-bottom:10px">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m5 12 7 7 7-7"/></svg>
+    链路 B · 记一笔账（写入 → 列表 → 报表失效）
+  </h3>
+  <div class="flow" style="margin-bottom:16px">
+    <div class="flow-head"><div></div><div class="h-client">Flutter 客户端</div><div class="h-server">Spring Boot 服务端</div><div class="h-store">存储层</div></div>
+    <ol class="flow-rows">
+      <li><span class="num">1</span><div class="cell t1"><div class="step"><span class="tier">客户端</span>AddTxnPage 选类型、分类、金额、日期，本地先做一轮校验</div></div><div class="cell"></div><div class="cell"></div></li>
+      <li><span class="num">2</span><div class="cell t1"><div class="step"><span class="tier">客户端</span>LedgerStore.add → RemoteLedgerRepository.insert → POST <span class="em">/api/txns</span>（带 Bearer）</div></div><div class="cell"></div><div class="cell"></div></li>
+      <li><span class="num">3</span><div class="cell"></div><div class="cell t2"><div class="step"><span class="tier">服务端</span>JwtAuthFilter 鉴权 → TxnController 的 <span class="em">@Valid TxnRequest</span> 校验字段</div></div><div class="cell"></div></li>
+      <li><span class="num">4</span><div class="cell"></div><div class="cell t2"><div class="step"><span class="tier">服务端</span>TxnService 调 CategoryCatalog 校验分类归属；金额统一保留两位小数</div></div><div class="cell"></div></li>
+      <li><span class="num">5</span><div class="cell"></div><div class="cell"></div><div class="cell t3"><div class="step"><span class="tier">存储</span>TxnRepository.save 写入 txn 表；索引 <span class="em">idx_txn_user_day(user_id, day, created_at)</span></div></div></li>
+      <li><span class="num">6</span><div class="cell"></div><div class="cell t2"><div class="step"><span class="tier">服务端</span>返回 201 Created 与 TxnResponse（含新分配的 id）</div></div><div class="cell"></div></li>
+      <li><span class="num">7</span><div class="cell t1"><div class="step"><span class="tier">客户端</span>LedgerStore 把新记录插到列表头部并按 day / createdAt 重排，<span class="em">revision++</span></div></div><div class="cell"></div><div class="cell"></div></li>
+      <li><span class="num">8</span><div class="cell t1"><div class="step"><span class="tier">客户端</span>RecordsPage 立刻可见新记录；AnalyticsPage 侦测 revision 变化后重新拉取统计</div></div><div class="cell"></div><div class="cell"></div></li>
+    </ol>
+  </div>
+
+  <h3 style="margin-bottom:10px">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+    链路 C · 统计口径与聚合
+  </h3>
+  <div class="flow" style="margin-bottom:16px">
+    <div class="flow-head"><div></div><div class="h-client">Flutter 客户端</div><div class="h-server">Spring Boot 服务端</div><div class="h-store">存储层</div></div>
+    <ol class="flow-rows">
+      <li><span class="num">1</span><div class="cell t1"><div class="step"><span class="tier">客户端</span>AnalyticsPage 选日 / 月 / 年 → LedgerStore.summaryOfMonth、dailyTrend、monthlyTrend、years</div></div><div class="cell"></div><div class="cell"></div></li>
+      <li><span class="num">2</span><div class="cell t1"><div class="step"><span class="tier">客户端</span>GET <span class="em">/api/stats/summary?from&to</span> · <span class="em">/daily?year&month</span> · <span class="em">/monthly?year</span> · <span class="em">/years</span></div></div><div class="cell"></div><div class="cell"></div></li>
+      <li><span class="num">3</span><div class="cell"></div><div class="cell t2"><div class="step"><span class="tier">服务端</span>StatsController 校验参数：from/to 必须是 yyyy-MM-dd，month 限 1–12</div></div><div class="cell"></div></li>
+      <li><span class="num">4</span><div class="cell"></div><div class="cell t2"><div class="step"><span class="tier">服务端</span>StatsService 调 TxnRepository 上四条 @Query 聚合语句</div></div><div class="cell"></div></li>
+      <li><span class="num">5</span><div class="cell"></div><div class="cell"></div><div class="cell t3"><div class="step"><span class="tier">存储</span>MySQL 执行 GROUP BY：按 type、按 category、按 day+type 分别 sum(amount)</div></div></li>
+      <li><span class="num">6</span><div class="cell"></div><div class="cell t2"><div class="step"><span class="tier">服务端</span>无记录的日期补 0，整月 / 全年补齐 → SummaryResponse / TrendPoint[]</div></div><div class="cell"></div></li>
+      <li><span class="num">7</span><div class="cell t1"><div class="step"><span class="tier">客户端</span>fl_chart 只负责渲染，不参与任何金额计算；离线仓库用 InMemoryStats 在内存复刻同一口径</div></div><div class="cell"></div><div class="cell"></div></li>
+    </ol>
+  </div>
+
+  <h3 style="margin-bottom:10px">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+    链路 D · 头像与反馈图片（multipart + 落盘）
+  </h3>
+  <div class="flow">
+    <div class="flow-head"><div></div><div class="h-client">Flutter 客户端</div><div class="h-server">Spring Boot 服务端</div><div class="h-store">存储层</div></div>
+    <ol class="flow-rows">
+      <li><span class="num">1</span><div class="cell t1"><div class="step"><span class="tier">客户端</span>file_picker 选图；Web 端拿不到本地路径，只取到 Uint8List 字节</div></div><div class="cell"></div><div class="cell"></div></li>
+      <li><span class="num">2</span><div class="cell t1"><div class="step"><span class="tier">客户端</span>POST <span class="em">/api/auth/me/avatar</span>，multipart 字段名 <span class="em">file</span>；反馈则是 <span class="em">/api/feedback</span> 的 content + images</div></div><div class="cell"></div><div class="cell"></div></li>
+      <li><span class="num">3</span><div class="cell"></div><div class="cell t2"><div class="step"><span class="tier">服务端</span>Spring multipart 限额：单文件 ≤2MB、整包 ≤10MB，超限直接 413</div></div><div class="cell"></div></li>
+      <li><span class="num">4</span><div class="cell"></div><div class="cell t2"><div class="step"><span class="tier">服务端</span>AvatarService / FeedbackService 按 Content-Type 反推扩展名，客户端文件名一律不用</div></div><div class="cell"></div></li>
+      <li><span class="num">5</span><div class="cell"></div><div class="cell"></div><div class="cell t3"><div class="step"><span class="tier">存储</span>落盘 <span class="em">data/avatars/{userId}.{ext}</span>（换图删旧文件）与 <span class="em">data/feedback/{userId}-{uuid}.{ext}</span></div></div></li>
+      <li><span class="num">6</span><div class="cell"></div><div class="cell"></div><div class="cell t3"><div class="step"><span class="tier">存储</span>库里只存文件名：users.avatar、feedback.images —— 路径穿越天然不可能发生</div></div></li>
+      <li><span class="num">7</span><div class="cell t1"><div class="step"><span class="tier">客户端</span>读头像 GET <span class="em">/api/auth/me/avatar?v=&lt;时间戳&gt;</span>，多带版本号绕开 Flutter 的 ImageCache</div></div><div class="cell t2"><div class="step"><span class="tier">服务端</span>直接返回二进制并带 Cache-Control: no-store，服务端忽略 ?v 参数</div></div><div class="cell"></div></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============ 5. 横切 ============ -->
+<section>
+  <div class="sec-head"><span class="sec-no">05</span><h2>横切关注点</h2></div>
+  <p class="sec-sub">这套约定横跨所有接口，四个链路共用同一套机制。</p>
+
+  <div class="mod-grid" style="margin-bottom:16px">
+    <div class="mod">
+      <div class="mod-head">
+        <span class="mod-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 8h10M7 12h10M7 16h6"/></svg></span>
+        <h3>统一响应体</h3>
+      </div>
+      <p class="mod-role">HTTP 状态码与业务码同时给出、互不替代：网关按 HTTP 判断，客户端按 code 分支。</p>
+      <dl class="mod-block"><dt>成功</dt><dd><span class="chip mono">{ code:0, message:"成功", success:true, data:{…} }</span></dd></dl>
+      <dl class="mod-block"><dt>失败</dt><dd><span class="chip mono">{ code:40401, message:"账单 999999 不存在", success:false, data:null }</span></dd></dl>
+      <dl class="mod-block"><dt>链路</dt><dd><span class="chip">ApiExceptionHandler</span><span class="chip">ErrorCode</span><span class="chip">ApiResponseBodyAdvice</span><span class="chip">ApiClient._unwrap</span></dd></dl>
+    </div>
+
+    <div class="mod">
+      <div class="mod-head">
+        <span class="mod-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4M12 16h.01"/></svg></span>
+        <h3>双份维护点</h3>
+      </div>
+      <p class="mod-role">有两处规则同时存在于前后端，改动必须成对进行——这是当前最需要留意的耦合。</p>
+      <dl class="mod-block"><dt>分类目录</dt><dd><span class="chip">后端 CategoryCatalog</span><span class="chip">前端 models/txn.dart 的 key</span></dd></dl>
+      <dl class="mod-block"><dt>手机号 / 邮箱</dt><dd><span class="chip">DTO 上的正则注解</span><span class="chip">utils/validators.dart</span></dd></dl>
+      <dl class="mod-block"><dt>后果</dt><dd><span class="chip">后端只认 key，图标与文案仍在客户端</span></dd></dl>
+    </div>
+  </div>
+
+  <table class="tbl">
+    <thead><tr><th>模块</th><th>端点</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>账户</td><td><div class="ep">
+        <code>POST /api/auth/register</code><code>POST /api/auth/login</code><code>GET /api/auth/me</code><code>PUT /api/auth/me</code><code>POST /api/auth/me/avatar</code><code>GET /api/auth/me/avatar</code>
+      </div></td><td>注册登录直接返回 token；资料可改昵称/邮箱/手机号，username 为登录凭据只读；头像 ≤2MB，仅 png/jpeg/webp/gif</td></tr>
+      <tr><td>账本</td><td><div class="ep">
+        <code>GET /api/txns</code><code>POST /api/txns</code><code>POST /api/txns/batch</code><code>DELETE /api/txns/{id}</code><code>DELETE /api/txns</code>
+      </div></td><td>按 day DESC、created_at DESC 分页，单页上限 1000；批量灌数据单次上限 5000</td></tr>
+      <tr><td>统计</td><td><div class="ep">
+        <code>GET /api/stats/summary</code><code>GET /api/stats/daily</code><code>GET /api/stats/monthly</code><code>GET /api/stats/years</code>
+      </div></td><td>区间合计与分类构成；整月每日趋势（补 0）；全年 12 月趋势；有账单的年份倒序</td></tr>
+      <tr><td>反馈</td><td><div class="ep"><code>POST /api/feedback</code></div></td><td>正文 ≤1000 字，最多 3 张图；仅登录用户可提交</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ 6. 取舍 ============ -->
+<section>
+  <div class="sec-head"><span class="sec-no">06</span><h2>设计取舍与风险点</h2></div>
+  <p class="sec-sub">读懂这七条，就读懂了这套代码为什么长这样。</p>
+
+  <div class="take">
+    <div class="take-item">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+      <div><div class="t">统计口径下沉到 SQL</div><div class="d">口径只有 MySQL 一处定义，客户端不参与计算，因此不会出现"两边算法不一致"。代价是离线仓库必须用 <em>InMemoryStats</em> 复刻同一套口径。</div></div>
+    </div>
+    <div class="take-item">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+      <div><div class="t">端口用 9090 而不是 8080</div><div class="d">本机 Windows 把 TCP 8006–8105 整段保留给 Hyper-V/WSL2，8080 绑不上会直接启动失败。改端口用 <em>SERVER_PORT</em>。</div></div>
+    </div>
+    <div class="take-item">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+      <div><div class="t">图片落盘，库里只存文件名</div><div class="d">文件名由服务端按 Content-Type 生成，客户端传的名字一律不用，因此不存在路径穿越。换头像时删旧文件，不留垃圾。</div></div>
+    </div>
+    <div class="take-item">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20Z"/></svg>
+      <div><div class="t">nginx 同源反代规避 CORS</div><div class="d">预览站把 /api 反代到宿主 9090，浏览器与后端同源，不触发预检；换 IP、域名、端口都不用重新 build。</div></div>
+    </div>
+    <div class="take-item">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <div><div class="t">JWT_SECRET 生产必须覆盖</div><div class="d">仓库里带的是开发默认值（HS512，至少 32 字节）。上线前用 <em>JWT_SECRET</em> 环境变量替换，否则等于没设防。</div></div>
+    </div>
+    <div class="take-item">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <div><div class="t">反馈写库的顺序是刻意选的</div>
+      <div class="d">事务回滚不会顺手删掉已落盘的图片，最坏留一张孤儿图；反过来先写库再落盘会留下指向空文件的记录，更难收拾。代码选了前者。</div></div>
+    </div>
+    <div class="take-item">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+      <div><div class="t">本地仓库只是备用</div>
+      <div class="d">Sqflite 与 SharedPreferences 两套实现服务离线与单测，线上走的始终是 REST 仓库。两套口径要一起回归。</div></div>
+    </div>
+    <div class="take-item">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+      <div><div class="t">改表结构要手工补列</div>
+      <div class="d">initdb 脚本只在数据卷为空时跑一次。改过 schema.sql 后已有库需要手工 ALTER，否则启动时 <em>ddl-auto=validate</em> 直接失败。</div></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <span>依据 ledger-front / ledger-backend 仓库实际代码绘制 · 2026-10-30</span>
+  <span>类名与路径均可直接全局搜索定位</span>
+</footer>
+
+</div>
+</body>
+</html>
