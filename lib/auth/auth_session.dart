@@ -2,17 +2,29 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show ChangeNotifier;
+import 'package:flutter/foundation.dart' show ChangeNotifier, kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/api_client.dart';
 
-/// 默认后端地址，可用 `flutter run --dart-define=API_BASE_URL=http://10.0.2.2:9090` 覆盖
-/// （Android 模拟器访问宿主机要用 10.0.2.2）。
-const defaultApiBaseUrl = String.fromEnvironment(
-  'API_BASE_URL',
-  defaultValue: 'http://localhost:9090',
-);
+/// 显式传入的后端地址，只在 `--dart-define=API_BASE_URL=...` 时有值
+/// （Android 模拟器访问宿主机要用 `http://10.0.2.2:9090`）。
+const apiBaseUrlOverride = String.fromEnvironment('API_BASE_URL');
+
+/// 默认后端地址，按平台分三种情况：
+/// - 命令行给过 `API_BASE_URL` 就照它来；
+/// - Web 上没给时取页面自身的 origin。部署形态是 nginx 同源托管静态产物并反代 `/api`
+///   （部署配置见同级后端仓库的 `deploy/docker-compose.preview.yml`），这样换 IP、换域名、
+///   换端口都不用重新 build，浏览器也不会触发 CORS 预检；
+/// - 其余平台回落到本机 9090，和本地开发时一致。
+String get defaultApiBaseUrl {
+  if (apiBaseUrlOverride.isNotEmpty) return apiBaseUrlOverride;
+  if (kIsWeb) {
+    final base = Uri.base;
+    if (base.isScheme('http') || base.isScheme('https')) return base.origin;
+  }
+  return 'http://localhost:9090';
+}
 
 class SessionUser {
   const SessionUser(this.id, this.username, this.nickname,

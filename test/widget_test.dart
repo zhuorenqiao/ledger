@@ -16,6 +16,21 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  Future<void> pumpSignedInHome(WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({
+      'auth.token': 'jwt',
+      'auth.user': jsonEncode({'id': 1, 'username': 'ren', 'nickname': '仁'}),
+    });
+    final session = await AuthSession.restore();
+    await tester.pumpWidget(
+      LedgerApp(
+        session: session,
+        storeFactory: (_) => LedgerStore(SharedPreferencesRepository()),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('未登录时只看到登录页', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final session = await AuthSession.restore();
@@ -197,5 +212,50 @@ void main() {
     scrollable.position.jumpTo(scrollable.position.maxScrollExtent);
     await tester.pumpAndSettle();
     expect(find.text('已经到底了'), findsOne);
+  });
+
+  testWidgets('向左甩切到报表 tab', (tester) async {
+    await pumpSignedInHome(tester);
+    expect(find.widgetWithText(AppBar, '我的账本'), findsOne);
+
+    // flingFrom 才会给 VelocityTracker 多个采样点；dragFrom 单步 moveBy 会让
+    // 识别器 accept 之后只剩一个样本，endVelocity 归零。
+    await tester.flingFrom(const Offset(250, 300), const Offset(-200, 0), 2000);
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(AppBar, '收支报表'), findsOne);
+    final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
+    expect(bar.selectedIndex, 1);
+  });
+
+  testWidgets('向右甩从报表切回流水', (tester) async {
+    await pumpSignedInHome(tester);
+    // 先用底部导航点过去，进入报表 tab，再用滑动切回来
+    await tester.tap(
+      find.descendant(
+        of: find.byType(NavigationBar),
+        matching: find.byIcon(Icons.pie_chart),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(AppBar, '收支报表'), findsOne);
+
+    await tester.flingFrom(const Offset(100, 300), const Offset(200, 0), 2000);
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(AppBar, '我的账本'), findsOne);
+    final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
+    expect(bar.selectedIndex, 0);
+  });
+
+  testWidgets('小幅慢拖不触发切换', (tester) async {
+    await pumpSignedInHome(tester);
+    // 位移 30；速度 50 px/s < 250 阈值。够不到切 tab 的判定。
+    await tester.flingFrom(const Offset(250, 300), const Offset(-30, 0), 50);
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(AppBar, '我的账本'), findsOne);
+    final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
+    expect(bar.selectedIndex, 0);
   });
 }

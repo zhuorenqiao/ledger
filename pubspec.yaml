@@ -99,3 +99,11 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+  # 中文字体自带一份，不要让 Web 端在运行时去 fonts.gstatic.com 拉 Noto Sans SC 分片：
+  # 桌面能连到 Google 不代表手机的内网/流量环境也能，连不上时中文就没有字形可画。
+  # 主题里的 fontFamily 在 lib/app_theme.dart 设置（OFL 许可，许可证同目录）。
+  fonts:
+    - family: NotoSansSC
+      fonts:
+        - asset: assets/fonts/NotoSansSC-Variable.ttf

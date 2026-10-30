@@ -7,6 +7,24 @@ const Color kIncome = Color(0xFF10B981);
 const Color kBalancePositive = Color(0xFF0EA5E9);
 const Color kBalanceNegative = Color(0xFFF59E0B);
 
+// ---- 字体 ----
+/// 全局字体族。自带一份 Noto Sans SC（见 pubspec 的 fonts 段），Web 端不依赖
+/// fonts.gstatic.com 的分片字体下载：内网/手机网络拉不到时中文就没有字形。
+const String kFontFamily = 'NotoSansSC';
+
+/// 给样式补上全局字体族；已经指定了字族的原样返回。
+///
+/// Material 组件渲染标题、正文时用的是 `DefaultTextStyle(style: ...)`，而
+/// DefaultTextStyle 是**替换**外层默认样式，不是合并（只有 DefaultTextStyle.merge
+/// 才合并）。外层默认样式带着 ThemeData.fontFamily，一旦组件主题里手写了一个
+/// TextStyle 又漏掉 fontFamily，字族就被整个丢掉 —— 引擎退回默认字体（没有中文字形），
+/// 中文就渲染成一排豆腐块（□）。
+///
+/// 实测踩过：AppBar 标题、SnackBar 内容都中招；页面里普通的 `Text(style: ...)`
+/// 不受影响，因为 Text 会把自己的样式与外层默认样式合并，字族还在。
+TextStyle withAppFont(TextStyle style) =>
+    style.fontFamily == null ? style.copyWith(fontFamily: kFontFamily) : style;
+
 // ---- 浅色主题（当前默认）的框架色 ----
 const Color kCanvas = Color(0xFFF5F7FF);
 const Color kInk = Color(0xFF1B2340);
@@ -119,6 +137,9 @@ ThemeData _buildTheme(_Frame f) {
     colorScheme: scheme,
     scaffoldBackgroundColor: f.canvas,
     splashFactory: InkSparkle.splashFactory,
+    // 自带一份 Noto Sans SC（见 pubspec 的 fonts 段）。不设这行的话 Web 端中文靠引擎
+    // 运行时去 fonts.gstatic.com 拉分片字体，内网/手机网络拉不到就没字形。
+    fontFamily: kFontFamily,
   );
 
   return base.copyWith(
@@ -138,12 +159,14 @@ ThemeData _buildTheme(_Frame f) {
       foregroundColor: f.onPrimary,
       elevation: 0,
       centerTitle: false,
-      titleTextStyle: TextStyle(
+      // withAppFont 不能省：AppBar 用 DefaultTextStyle 替换标题样式（不是合并），
+      // 这里漏掉字族，标题里的中文就会退回引擎默认字体，变成一排豆腐块。
+      titleTextStyle: withAppFont(TextStyle(
         color: f.onPrimary,
         fontSize: 20,
         fontWeight: FontWeight.w600,
         letterSpacing: 0.2,
-      ),
+      )),
     ),
     textTheme: base.textTheme.apply(bodyColor: f.ink, displayColor: f.ink),
     dialogTheme: DialogThemeData(backgroundColor: f.card),
@@ -155,7 +178,9 @@ ThemeData _buildTheme(_Frame f) {
       elevation: 0,
       height: 64,
       labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-      labelTextStyle: WidgetStatePropertyAll(TextStyle(fontSize: 12, color: f.inkSoft)),
+      labelTextStyle: WidgetStatePropertyAll(
+        withAppFont(TextStyle(fontSize: 12, color: f.inkSoft)),
+      ),
       iconTheme: const WidgetStatePropertyAll(IconThemeData(size: 22)),
     ),
     floatingActionButtonTheme: FloatingActionButtonThemeData(
@@ -186,7 +211,8 @@ ThemeData _buildTheme(_Frame f) {
     ),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: f.primaryDeep,
-      contentTextStyle: const TextStyle(color: Colors.white),
+      // 同 AppBar 标题：SnackBar 用 DefaultTextStyle 替换内容样式，字族要自己带上。
+      contentTextStyle: withAppFont(const TextStyle(color: Colors.white)),
       actionTextColor: Colors.white,
       behavior: SnackBarBehavior.floating,
     ),

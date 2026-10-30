@@ -34,6 +34,38 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   int _index = 0;
 
+  /// 每次 tab 切换自增：作为动画 builder 的 key，让 TweenAnimationBuilder 重新
+  /// 挂载并重播；初值为 0 表示「用户还没切过」，body 保持原样不做变换，
+  /// 首页 golden 走 identity 分支。
+  int _transitionSeq = 0;
+
+  /// 新页进场方向：+1 从右侧进（向左甩或点右边 tab），-1 从左侧进。
+  int _slideDirection = 0;
+
+  /// 只有完成一次可辨的横向甩动才切：velocity 阈值 250 px/s。位移阈值省略
+  /// 是因为 GestureDetector.onHorizontalDragEnd 只给到 velocity，加位移需要
+  /// 额外累积 DragUpdate 的 dx，收益不明显。
+  static const _swipeVelocityThreshold = 250.0;
+
+  void _setIndex(int i, {int? direction}) {
+    if (i == _index) return;
+    setState(() {
+      final dir = direction ?? (i > _index ? 1 : -1);
+      _index = i;
+      _slideDirection = dir;
+      _transitionSeq += 1;
+    });
+  }
+
+  void _onHorizontalDragEnd(DragEndDetails d) {
+    final vx = d.velocity.pixelsPerSecond.dx;
+    if (vx.abs() < _swipeVelocityThreshold) return;
+    final dir = vx < 0 ? 1 : -1;
+    final next = (_index + dir).clamp(0, 1);
+    if (next == _index) return;
+    _setIndex(next, direction: dir);
+  }
+
   Future<void> _openAdd() async {
     await Navigator.push(
       context,
@@ -143,6 +175,47 @@ class _HomePageState extends State<HomePage> {
     await runGuarded(context, widget.store.clearAll);
   }
 
+  Widget _buildBody() {
+    final stack = IndexedStack(
+      index: _index,
+      children: [
+        RecordsPage(store: widget.store),
+        AnalyticsPage(store: widget.store, onAdd: _openAdd),
+      ],
+    );
+    // 首屏或从未切换过：直接返回，不动 IndexedStack，保住既有 golden 字节一致。
+    if (_transitionSeq == 0) {
+      return GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragEnd: _onHorizontalDragEnd,
+        child: stack,
+      );
+    }
+    // 切换过一次：包一层 TweenAnimationBuilder。key 变化触发重播，从
+    // ±6% 视口宽度的位移缓动到 0，形成一次短促滑入；IndexedStack 与两个子页
+    // 的状态保持不变。
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragEnd: _onHorizontalDragEnd,
+      child: LayoutBuilder(
+        builder: (context, constraints) => TweenAnimationBuilder<Offset>(
+          key: ValueKey(_transitionSeq),
+          tween: Tween(
+            begin: Offset(_slideDirection.toDouble(), 0),
+            end: Offset.zero,
+          ),
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeOutCubic,
+          builder: (context, factor, child) => Transform.translate(
+            offset: factor * constraints.maxWidth * 0.06,
+            child: child,
+          ),
+          child: stack,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -214,13 +287,7 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
-      body: IndexedStack(
-        index: _index,
-        children: [
-          RecordsPage(store: widget.store),
-          AnalyticsPage(store: widget.store, onAdd: _openAdd),
-        ],
-      ),
+      body: _buildBody(),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openAdd,
         icon: const Icon(Icons.add),
@@ -228,7 +295,7 @@ class _HomePageState extends State<HomePage> {
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
+        onDestinationSelected: _setIndex,
         destinations: [
           NavigationDestination(
             icon: const Icon(Icons.receipt_long),

@@ -1,11 +1,11 @@
 {
-    "name": "flutter_demo2",
-    "short_name": "flutter_demo2",
+    "name": "记账本",
+    "short_name": "记账本",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "个人记账本：记录收支、看趋势与分类占比。",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
